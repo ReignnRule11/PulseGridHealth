@@ -83,3 +83,43 @@ class Alert(Base):
     status: Mapped[str] = mapped_column(String(30), default="pending_review", nullable=False)
     explanation: Mapped[str | None] = mapped_column(String(2000))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+
+class Investigation(Base):
+    __tablename__ = "investigations"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(30), default="in_progress", nullable=False)
+    started_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    findings: Mapped[str | None] = mapped_column(String(4000))
+    disposition: Mapped[str | None] = mapped_column(String(40))
+    resolution_rationale: Mapped[str | None] = mapped_column(String(2000))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (CheckConstraint("status IN ('in_progress', 'closed')", name="ck_investigation_status"),)
+
+
+class ResponseAction(Base):
+    __tablename__ = "response_actions"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    description: Mapped[str] = mapped_column(String(2000), nullable=False)
+    owner_role: Mapped[str | None] = mapped_column(String(100))
+    due_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(30), default="planned", nullable=False)
+    created_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    __table_args__ = (CheckConstraint("status IN ('planned', 'in_progress', 'completed', 'cancelled')", name="ck_response_action_status"),)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, index=True)
+    actor: Mapped[str] = mapped_column(String(120), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
