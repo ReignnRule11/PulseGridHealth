@@ -53,7 +53,7 @@ def _get_or_create_group(db: Session, row):
         db.add(group)
         db.flush()
     elif row.denominator:
-        group.cohort_size = max(group.cohort_size or 0, row.denominator)
+        group.cohort_size = min(group.cohort_size or row.denominator, row.denominator)
     return org, None, group
 
 def _detect_for_observation(db: Session, observation: HealthObservation) -> int:
