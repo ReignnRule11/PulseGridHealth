@@ -1,5 +1,9 @@
 # PulseGrid Health
 
+
+[![Phase 1 CI](https://github.com/ReignnRule11/PulseGridHealth/actions/workflows/ci.yml/badge.svg)](https://github.com/ReignnRule11/PulseGridHealth/actions/workflows/ci.yml)
+
+
 Population & Workforce Health Intelligence Platform.
 
 PulseGrid Health is an explainable early-warning prototype for aggregate community and workforce health signals. The Phase 1 MVP connects CSV ingestion, PostgreSQL persistence, robust statistical screening, evidence-backed candidate alerts, and a live dashboard.
