@@ -36,6 +36,7 @@ class WorkforceGroup(Base):
 class DataSource(Base):
     __tablename__ = "data_sources"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     source_name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
     source_type: Mapped[str] = mapped_column(String(80), nullable=False)
     provenance: Mapped[str | None] = mapped_column(String(500))
@@ -44,6 +45,7 @@ class DataSource(Base):
 class HealthObservation(Base):
     __tablename__ = "health_observations"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     community_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("communities.id"))
     workforce_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workforce_groups.id"))
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_sources.id"), nullable=False)
@@ -65,6 +67,7 @@ class HealthObservation(Base):
 class DetectionResult(Base):
     __tablename__ = "detection_results"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     observation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("health_observations.id"), nullable=False, unique=True)
     baseline: Mapped[float | None] = mapped_column(Float)
     anomaly_score: Mapped[float | None] = mapped_column(Float)
@@ -78,6 +81,7 @@ class DetectionResult(Base):
 class Alert(Base):
     __tablename__ = "alerts"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     detection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("detection_results.id"), unique=True, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending_review", nullable=False)
@@ -89,6 +93,7 @@ class Alert(Base):
 class Investigation(Base):
     __tablename__ = "investigations"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(30), default="in_progress", nullable=False)
     started_by: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -104,6 +109,7 @@ class Investigation(Base):
 class ResponseAction(Base):
     __tablename__ = "response_actions"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, index=True)
     action_type: Mapped[str] = mapped_column(String(80), nullable=False)
     description: Mapped[str] = mapped_column(String(2000), nullable=False)
@@ -118,6 +124,7 @@ class ResponseAction(Base):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("alerts.id"), nullable=False, index=True)
     actor: Mapped[str] = mapped_column(String(120), nullable=False)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -302,3 +302,58 @@ def accept_invitation(payload: AcceptInviteIn, request: Request, db: Session = D
     invitation.accepted_at = _now()
     db.commit()
     return {"status": "accepted", "user_id": str(user.id), "organization_id": str(invitation.organization_id)}
+
+
+
+def get_request_tenant(
+    request: Request,
+    x_organization_id: str | None = Header(default=None, alias="X-Organization-ID"),
+    db: Session = Depends(get_db),
+):
+    raw = request.cookies.get(SESSION_COOKIE)
+    actor = "demo-reviewer"
+    is_demo = False
+    if raw:
+        auth_session = db.scalar(select(AuthSession).where(AuthSession.token_hash == _hash_token(raw)))
+        if not auth_session or auth_session.revoked_at or _aware(auth_session.expires_at) <= _now():
+            raise HTTPException(status_code=401, detail="session_invalid_or_expired")
+        user = db.get(User, auth_session.user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="account_inactive")
+        if not x_organization_id:
+            raise HTTPException(status_code=400, detail="organization_header_required")
+        try:
+            organization_id = UUID(x_organization_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="invalid_organization_id") from exc
+        membership = db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user.id,
+            OrganizationMembership.is_active.is_(True),
+        ))
+        if not membership:
+            raise HTTPException(status_code=403, detail="organization_access_denied")
+        role = membership.role
+        actor = user.email
+    else:
+        if settings.app_env.lower() == "production":
+            raise HTTPException(status_code=401, detail="authentication_required")
+        organization = db.scalar(select(Organization).where(Organization.name == "PulseGrid Demonstration"))
+        if not organization:
+            organization = Organization(name="PulseGrid Demonstration", organization_type="demo")
+            db.add(organization)
+            db.flush()
+        organization_id = organization.id
+        role = "demo"
+        is_demo = True
+    if db.bind and db.bind.dialect.name == "postgresql":
+        db.execute(text("SELECT set_config('app.organization_id', :organization_id, true)"),
+                   {"organization_id": str(organization_id)})
+    return {"organization_id": organization_id, "role": role, "actor": actor, "is_demo": is_demo}
+
+
+def enforce_roles(context: dict, *allowed: str):
+    if context["is_demo"]:
+        return
+    if context["role"] not in allowed:
+        raise HTTPException(status_code=403, detail="insufficient_role")
