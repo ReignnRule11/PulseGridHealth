@@ -92,7 +92,7 @@ def add_response_action(alert_id: UUID, payload: ResponseActionIn, db: Session =
     if alert.status != "investigating":
         raise HTTPException(status_code=409, detail="invalid_transition_expected_investigating")
     _investigation(db, alert.id)
-    due = date.fromisoformat(payload.due_date) if payload.due_date else None
+    due = payload.due_date
     action = ResponseAction(alert_id=alert.id, action_type=payload.action_type,
                             description=payload.description, owner_role=payload.owner_role,
                             due_date=due, created_by=DEMO_ACTOR)
