@@ -19,7 +19,7 @@ def run_migrations_offline():
 def run_migrations_online():
     connectable = engine_from_config(
         {"sqlalchemy.url": settings.database_url},
-        prefix="", poolclass=pool.NullPool
+        prefix="sqlalchemy.", poolclass=pool.NullPool
     )
     with connectable.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
