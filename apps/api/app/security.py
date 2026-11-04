@@ -349,7 +349,7 @@ def get_request_tenant(
     if db.bind and db.bind.dialect.name == "postgresql":
         db.execute(text("SELECT set_config('app.organization_id', :organization_id, true)"),
                    {"organization_id": str(organization_id)})
-    return {"organization_id": organization_id, "role": role, "actor": actor, "is_demo": is_demo}
+    return {"organization_id": organization_id, "role": role, "actor": actor, "is_demo": is_demo, "csrf_hash": auth_session.csrf_hash if raw else None}
 
 
 def enforce_roles(context: dict, *allowed: str):
@@ -357,3 +357,16 @@ def enforce_roles(context: dict, *allowed: str):
         return
     if context["role"] not in allowed:
         raise HTTPException(status_code=403, detail="insufficient_role")
+
+
+def require_tenant_csrf(request: Request, context: dict = Depends(get_request_tenant)):
+    if context["is_demo"]:
+        return True
+    _origin_ok(request)
+    cookie = request.cookies.get(CSRF_COOKIE)
+    header = request.headers.get("X-CSRF-Token")
+    if not cookie or not header or not hmac.compare_digest(cookie, header):
+        raise HTTPException(status_code=403, detail="csrf_validation_failed")
+    if not hmac.compare_digest(_hash_token(cookie), context["csrf_hash"] or ""):
+        raise HTTPException(status_code=403, detail="csrf_session_mismatch")
+    return True
