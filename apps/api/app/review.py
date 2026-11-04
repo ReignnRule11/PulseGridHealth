@@ -39,8 +39,9 @@ def acknowledge_alert(alert_id: UUID, context: dict = Depends(get_request_tenant
         raise HTTPException(status_code=409, detail="invalid_transition_expected_pending_review")
     alert.status = "acknowledged"
     _audit(db, alert, context, "alert.acknowledged")
+    result = {"id": str(alert.id), "status": alert.status}
     db.commit()
-    return {"id": str(alert.id), "status": alert.status}
+    return result
 
 
 @router.post("/{alert_id}/investigation")
@@ -58,8 +59,9 @@ def start_investigation(alert_id: UUID, context: dict = Depends(get_request_tena
     alert.status = "investigating"
     db.flush()
     _audit(db, alert, context, "investigation.started", {"investigation_id": str(item.id)})
+    result = {"id": str(item.id), "alert_id": str(alert.id), "status": item.status}
     db.commit()
-    return {"id": str(item.id), "alert_id": str(alert.id), "status": item.status}
+    return result
 
 
 @router.post("/{alert_id}/findings")
@@ -74,8 +76,9 @@ def record_findings(alert_id: UUID, payload: FindingsIn,
     item.disposition = payload.disposition
     item.updated_at = datetime.now(timezone.utc)
     _audit(db, alert, context, "investigation.findings_recorded", {"disposition": payload.disposition})
+    result = {"alert_id": str(alert.id), "disposition": item.disposition, "updated": True}
     db.commit()
-    return {"alert_id": str(alert.id), "disposition": item.disposition, "updated": True}
+    return result
 
 
 @router.post("/{alert_id}/actions")
@@ -93,8 +96,9 @@ def add_response_action(alert_id: UUID, payload: ResponseActionIn,
     db.flush()
     _audit(db, alert, context, "response_action.created",
            {"action_id": str(action.id), "action_type": action.action_type})
+    result = {"id": str(action.id), "status": action.status}
     db.commit()
-    return {"id": str(action.id), "status": action.status}
+    return result
 
 
 @router.post("/{alert_id}/resolve")
@@ -113,8 +117,9 @@ def resolve_alert(alert_id: UUID, payload: ResolutionIn,
     alert.status = "resolved"
     _audit(db, alert, context, "alert.resolved",
            {"disposition": payload.disposition, "rationale": payload.rationale})
+    result = {"id": str(alert.id), "status": alert.status, "disposition": item.disposition}
     db.commit()
-    return {"id": str(alert.id), "status": alert.status, "disposition": item.disposition}
+    return result
 
 
 @router.get("/{alert_id}/history")
