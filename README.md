@@ -6,7 +6,7 @@
 
 Population & Workforce Health Intelligence Platform.
 
-PulseGrid Health is an explainable early-warning prototype for aggregate community and workforce health signals. The Phase 1 MVP connects CSV ingestion, PostgreSQL persistence, robust statistical screening, evidence-backed candidate alerts, and a live dashboard.
+PulseGrid Health is an explainable early-warning prototype for aggregate community and workforce health signals. The MVP connects CSV ingestion, PostgreSQL persistence, robust statistical screening, evidence-backed candidate alerts, human review workflows, and a role-aware organization workspace.
 
 > **Demonstration boundary:** use synthetic or explicitly authorised aggregate data only. Do not upload patient- or employee-identifiable records. Statistical candidates are not diagnoses, outbreak declarations, or autonomous response decisions. Human review is mandatory.
 
@@ -67,13 +67,13 @@ Domains are `community` or `workforce`. Values must be finite and non-negative; 
 - `GET /api/v1/dashboard`
 - `GET /api/v1/alerts?status=pending_review`
 - `POST /api/v1/observations/import` (multipart field `file`)
-- `POST /api/v1/detection/run`
+- `POST /api/v1/detection/run`\n- `POST /api/v1/alerts/{alert_id}/acknowledge`\n- `POST /api/v1/alerts/{alert_id}/investigation`\n- `POST /api/v1/alerts/{alert_id}/findings`\n- `POST /api/v1/alerts/{alert_id}/actions`\n- `POST /api/v1/alerts/{alert_id}/resolve`\n- `GET /api/v1/alerts/{alert_id}/history`
 
-## Phase 2 identity and access foundation
+## Phase 2 identity, tenant security, and frontend workspace
 
-Phase 2 introduces organization-scoped accounts, invitation-based onboarding, server-side role memberships, opaque database-backed sessions, password hashing with scrypt, login lockout after repeated failures, CSRF validation, and secure HttpOnly session cookies. Organization roles are `org_admin`, `analyst`, `reviewer`, and `viewer`.
+Phase 2 introduces organization-scoped accounts, invitation-based onboarding, server-side role memberships, opaque database-backed sessions, password hashing with scrypt, login lockout after repeated failures, CSRF validation, secure HttpOnly session cookies, and PostgreSQL row-level security. Organization roles are `org_admin`, `analyst`, `reviewer`, and `viewer`.
 
-Set a strong one-time `BOOTSTRAP_TOKEN` in the API environment before calling `POST /api/v1/auth/bootstrap`. Bootstrap creates the first organization administrator and is disabled when the token is unset. Call `GET /api/v1/auth/csrf` before browser POST requests; send the returned token in `X-CSRF-Token`. After login, send the selected organization UUID in `X-Organization-ID` for organization-scoped authorization. Organization administrators can create invitations; the returned invitation token must be delivered through a separate secure channel and is single-use. No email delivery is configured in this phase.
+Set a strong one-time `BOOTSTRAP_TOKEN` in the API environment before calling `POST /api/v1/auth/bootstrap`. Bootstrap creates the first organization administrator and is disabled when the token is unset. The frontend at `apps/web` provides sign-in, invitation acceptance, organization selection, dashboard access, CSV ingestion, alert review, review history, and administrator-managed invitations. It calls `GET /api/v1/auth/csrf` before browser POST requests and sends the returned token in `X-CSRF-Token`. Authenticated organization requests include the selected organization UUID in `X-Organization-ID`. Invitation tokens are single-use and must be delivered through a separate secure channel; email delivery is not configured.
 
 Authentication endpoints:
 - `GET /api/v1/auth/csrf`
@@ -84,7 +84,7 @@ Authentication endpoints:
 - `POST /api/v1/auth/organizations/{organization_id}/invitations`
 - `POST /api/v1/auth/invitations/accept`
 
-**Phase 2 is not yet production-ready.** Existing health-data, dashboard, import, detection and alert-review routes remain demo-only and continue to fail closed in production. Health observations, data sources, detection results, alerts, investigations, response actions and audit events carry organization ownership. PostgreSQL RLS policies enforce the selected organization using transaction-local `app.organization_id`; API requests validate membership and set this context before tenant queries. Analysts can ingest and run detection; reviewers can manage alert investigations; viewers are read-only. Add deployment-level rate limiting, TLS, secret rotation, backups, retention controls and an independent security review before real data use.
+**The system is not yet production-ready for real health data.** Authenticated data, dashboard, ingestion, detection, and review routes validate organization membership and role permissions. Health observations, data sources, detection results, alerts, investigations, response actions, and audit events carry organization ownership. PostgreSQL RLS policies enforce the selected organization using transaction-local `app.organization_id`; a restricted non-superuser database role is required because PostgreSQL superusers bypass RLS. Analysts can ingest and run detection; reviewers can manage alert investigations; viewers are read-only. Before production use, add and verify rate limiting, TLS and same-site cookie deployment, secret rotation, backups, retention controls, account recovery/deactivation, invitation delivery, operational monitoring, and an independent security review.
 
 ## Security boundary
 

@@ -78,7 +78,7 @@ export default function Workspace() {
     requestCsrf().then(loadIdentity).catch(e => setMessage(e instanceof Error ? e.message : "Connection failed"));
     const params = new URLSearchParams(window.location.search);
     const token = params.get("invite");
-    if (token) setInviteInput(token);
+    if (token) { setInviteInput(token); window.history.replaceState({}, "", window.location.pathname); }
   }, [requestCsrf, loadIdentity]);
 
   useEffect(() => { if (me && orgId) loadWorkspace(); }, [me, orgId, loadWorkspace]);
