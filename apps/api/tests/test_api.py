@@ -129,3 +129,62 @@ def test_workforce_cohort_below_minimum_is_suppressed(client):
     assert response.json()["alerts_created"] == 0
     assert client.get("/api/v1/alerts").json()["items"] == []
     assert client.get("/api/v1/dashboard").json()["workforce_observations"] == 0
+
+def test_generated_synthetic_datasets_import_end_to_end(client, tmp_path):
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    repo_root = Path(__file__).resolve().parents[3]
+    output = tmp_path / "synthetic"
+    subprocess.run(
+        [sys.executable, str(repo_root / "scripts" / "generate_synthetic_data.py"),
+         "--output", str(output), "--seed", "20261104"],
+        check=True,
+    )
+    community = (output / "community_observations.csv").read_bytes()
+    workforce = (output / "workforce_observations.csv").read_bytes()
+
+    community_result = client.post(
+        "/api/v1/observations/import",
+        files={"file": ("community.csv", io.BytesIO(community), "text/csv")},
+    )
+    assert community_result.status_code == 200, community_result.text
+    assert community_result.json()["accepted"] == 180
+
+    workforce_result = client.post(
+        "/api/v1/observations/import",
+        files={"file": ("workforce.csv", io.BytesIO(workforce), "text/csv")},
+    )
+    assert workforce_result.status_code == 200, workforce_result.text
+    assert workforce_result.json()["accepted"] == 360
+
+    alerts = client.get("/api/v1/alerts").json()["items"]
+    assert any(a["domain"] == "community" and a["group_code"] == "C002" for a in alerts)
+    assert any(a["domain"] == "workforce" and a["group_code"] == "W003" for a in alerts)
+    dashboard = client.get("/api/v1/dashboard").json()
+    assert dashboard["community_observations"] == 180
+    assert dashboard["workforce_observations"] == 360
+
+    duplicate = client.post(
+        "/api/v1/observations/import",
+        files={"file": ("community.csv", io.BytesIO(community), "text/csv")},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["accepted"] == 0
+    assert duplicate.json()["duplicates"] == 180
+
+
+def test_workforce_without_known_cohort_size_is_suppressed(client):
+    lines = "".join(
+        f"workforce,W-UNKNOWN,SYNTHETIC,2026-04-{day:02d},weekly_mean_heat_index,{value},,celsius\\n"
+        for day, value in [(1, 30), (8, 31), (15, 30), (22, 32), (29, 45)]
+    )
+    response = client.post(
+        "/api/v1/observations/import",
+        files={"file": ("unknown-cohort.csv", io.BytesIO(csv_file(lines)), "text/csv")},
+    )
+    assert response.status_code == 200
+    assert response.json()["accepted"] == 0
+    assert response.json()["rejected"] == 5
+    assert client.get("/api/v1/dashboard").json()["workforce_observations"] == 0

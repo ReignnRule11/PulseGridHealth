@@ -30,7 +30,7 @@ def _get_or_create_source(db: Session, code: str) -> DataSource:
     db.flush()
     return source
 
-def _get_or_create_group(db: Session, row):
+def _get_or_create_group(db: Session, row, cohort_size_hint: int | None = None):
     org = db.scalar(select(Organization).where(Organization.name == "PulseGrid Demonstration"))
     if not org:
         org = Organization(name="PulseGrid Demonstration", organization_type="demo")
@@ -49,11 +49,13 @@ def _get_or_create_group(db: Session, row):
     group = db.scalar(select(WorkforceGroup).where(WorkforceGroup.organization_id == org.id, WorkforceGroup.location_code == row.group_code))
     if not group:
         group = WorkforceGroup(organization_id=org.id, name=f"Workforce {row.group_code}", sector="unspecified",
-                               location_code=row.group_code, cohort_size=row.denominator)
+                               location_code=row.group_code, cohort_size=row.denominator or cohort_size_hint)
         db.add(group)
         db.flush()
-    elif row.denominator:
-        group.cohort_size = min(group.cohort_size or row.denominator, row.denominator)
+    else:
+        known_size = row.denominator or cohort_size_hint
+        if known_size:
+            group.cohort_size = min(group.cohort_size or known_size, known_size)
     return org, None, group
 
 def _detect_for_observation(db: Session, observation: HealthObservation) -> int:
@@ -167,12 +169,16 @@ async def import_observations(file: UploadFile = File(...), db: Session = Depend
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     accepted = duplicates = alerts_created = 0
+    cohort_hints = {}
+    for item in rows:
+        if item.domain == "workforce" and item.denominator is not None:
+            cohort_hints[item.group_code] = min(cohort_hints.get(item.group_code, item.denominator), item.denominator)
     try:
         # Process chronologically so each observation is evaluated only against prior dates.
         for row in sorted(rows, key=lambda item: (item.observed_date, item.domain, item.group_code, item.indicator)):
             source = _get_or_create_source(db, row.source_code)
-            _, community, workforce = _get_or_create_group(db, row)
-            if row.domain == "workforce" and workforce and workforce.cohort_size and workforce.cohort_size < settings.min_workforce_cohort_size:
+            _, community, workforce = _get_or_create_group(db, row, cohort_hints.get(row.group_code) if row.domain == "workforce" else None)
+            if row.domain == "workforce" and workforce and (not workforce.cohort_size or workforce.cohort_size < settings.min_workforce_cohort_size):
                 errors.append(f"{row.group_code}/{row.observed_date}: workforce_cohort_below_minimum")
                 continue
             filters = [HealthObservation.source_id == source.id, HealthObservation.observed_date == row.observed_date,
