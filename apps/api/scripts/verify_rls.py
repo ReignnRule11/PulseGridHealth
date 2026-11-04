@@ -21,13 +21,7 @@ with engine.begin() as connection:
     assert len(policies) == len(tenant_tables), policies
     assert all(row.relrowsecurity and row.relforcerowsecurity for row in policies), policies
 
-    connection.execute(text("""
-        DO $ BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pulsegrid_rls_test') THEN
-            CREATE ROLE pulsegrid_rls_test NOLOGIN NOSUPERUSER NOBYPASSRLS;
-          END IF;
-        END $
-    """))
+    connection.execute(text("CREATE ROLE pulsegrid_rls_test NOLOGIN NOSUPERUSER NOBYPASSRLS"))
     connection.execute(text("GRANT USAGE ON SCHEMA public TO pulsegrid_rls_test"))
     connection.execute(text("GRANT SELECT, INSERT ON data_sources TO pulsegrid_rls_test"))
 
