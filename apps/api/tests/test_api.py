@@ -177,7 +177,7 @@ def test_generated_synthetic_datasets_import_end_to_end(client, tmp_path):
 
 def test_workforce_without_known_cohort_size_is_suppressed(client):
     lines = "".join(
-        f"workforce,W-UNKNOWN,SYNTHETIC,2026-04-{day:02d},weekly_mean_heat_index,{value},,celsius\\n"
+        f"workforce,W-UNKNOWN,SYNTHETIC,2026-04-{day:02d},weekly_mean_heat_index,{value},,celsius\n"
         for day, value in [(1, 30), (8, 31), (15, 30), (22, 32), (29, 45)]
     )
     response = client.post(
