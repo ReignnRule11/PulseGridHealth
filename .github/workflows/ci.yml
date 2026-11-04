@@ -19,6 +19,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: pytest
         env:
+          PYTHONPATH: .
           DATABASE_URL: postgresql+psycopg://unused:unused@localhost:5432/unused
           APP_ENV: test
 
