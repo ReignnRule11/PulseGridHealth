@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from sqlalchemy import (
-    String, Date, DateTime, Numeric, Integer, ForeignKey, CheckConstraint,
+    String, Date, DateTime, Numeric, Integer, ForeignKey, CheckConstraint, Boolean,
     UniqueConstraint, JSON, Float, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -123,3 +123,57 @@ class AuditLog(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     detail: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(254), nullable=False, unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(300), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_id", name="uq_membership_org_user"),
+        CheckConstraint("role IN ('org_admin', 'analyst', 'reviewer', 'viewer')", name="ck_membership_role"),
+    )
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    csrf_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class OrganizationInvitation(Base):
+    __tablename__ = "organization_invitations"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(254), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    __table_args__ = (
+        CheckConstraint("role IN ('org_admin', 'analyst', 'reviewer', 'viewer')", name="ck_invitation_role"),
+    )

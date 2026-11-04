@@ -69,6 +69,23 @@ Domains are `community` or `workforce`. Values must be finite and non-negative; 
 - `POST /api/v1/observations/import` (multipart field `file`)
 - `POST /api/v1/detection/run`
 
+## Phase 2 identity and access foundation
+
+Phase 2 introduces organization-scoped accounts, invitation-based onboarding, server-side role memberships, opaque database-backed sessions, password hashing with scrypt, login lockout after repeated failures, CSRF validation, and secure HttpOnly session cookies. Organization roles are `org_admin`, `analyst`, `reviewer`, and `viewer`.
+
+Set a strong one-time `BOOTSTRAP_TOKEN` in the API environment before calling `POST /api/v1/auth/bootstrap`. Bootstrap creates the first organization administrator and is disabled when the token is unset. Call `GET /api/v1/auth/csrf` before browser POST requests; send the returned token in `X-CSRF-Token`. After login, send the selected organization UUID in `X-Organization-ID` for organization-scoped authorization. Organization administrators can create invitations; the returned invitation token must be delivered through a separate secure channel and is single-use. No email delivery is configured in this phase.
+
+Authentication endpoints:
+- `GET /api/v1/auth/csrf`
+- `POST /api/v1/auth/bootstrap`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/organizations/{organization_id}/invitations`
+- `POST /api/v1/auth/invitations/accept`
+
+**Phase 2 is not yet production-ready.** Existing health-data, dashboard, import, detection and alert-review routes remain demo-only and continue to fail closed in production. Organization membership and role checks are implemented for identity operations, but tenant scoping and row-level database policies across health observations, alerts, investigations and audit records are the next required implementation step. Add deployment-level rate limiting, TLS, secret rotation, backups, retention controls and an independent security review before real data use.
+
 ## Security boundary
 
 This is a local/synthetic demonstration MVP, not a production health-data service. In `APP_ENV=production`, data and dashboard endpoints fail closed until authentication, server-side RBAC, tenant isolation/RLS, audit controls, retention policies, and a security review are implemented. Keep hosted demo data synthetic. Configure CORS to the exact frontend origin.

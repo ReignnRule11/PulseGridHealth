@@ -11,12 +11,14 @@ from app.services.ingestion import parse_csv
 from app.services.detection import robust_anomaly
 
 app = FastAPI(title="PulseGrid Health API", version="0.3.0")
+from app.security import router as security_router
+app.include_router(security_router)
 from app.review import router as review_router
 app.include_router(review_router)
 origins = [x.strip() for x in settings.cors_origins.split(",") if x.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_origins=origins, allow_credentials=False,
-    allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization"],
+    CORSMiddleware, allow_origins=origins, allow_credentials=True,
+    allow_methods=["GET", "POST"], allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Organization-ID", "X-Bootstrap-Token"],
 )
 
 def demo_only():

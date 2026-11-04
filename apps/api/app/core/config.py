@@ -9,5 +9,8 @@ class Settings(BaseSettings):
     min_baseline_points: int = 6
     anomaly_z_threshold: float = 3.5
     min_workforce_cohort_size: int = 20
+    bootstrap_token: str = ""
+    session_ttl_hours: int = 12
+    invitation_ttl_hours: int = 72
 
 settings = Settings()
