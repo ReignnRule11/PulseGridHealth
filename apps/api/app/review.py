@@ -83,7 +83,7 @@ def record_findings(alert_id: UUID, payload: FindingsIn,
 
 @router.post("/{alert_id}/actions")
 def add_response_action(alert_id: UUID, payload: ResponseActionIn,
-                        context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+                        context: dict = Depends(get_request_tenant), csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "reviewer")
     alert = _alert(db, alert_id, context["organization_id"])
     if alert.status != "investigating":
@@ -103,7 +103,7 @@ def add_response_action(alert_id: UUID, payload: ResponseActionIn,
 
 @router.post("/{alert_id}/resolve")
 def resolve_alert(alert_id: UUID, payload: ResolutionIn,
-                  context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+                  context: dict = Depends(get_request_tenant), csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "reviewer")
     alert = _alert(db, alert_id, context["organization_id"])
     if alert.status != "investigating":
