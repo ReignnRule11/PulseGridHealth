@@ -66,7 +66,7 @@ def start_investigation(alert_id: UUID, context: dict = Depends(get_request_tena
 
 @router.post("/{alert_id}/findings")
 def record_findings(alert_id: UUID, payload: FindingsIn,
-                    context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+                    context: dict = Depends(get_request_tenant), csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "reviewer")
     alert = _alert(db, alert_id, context["organization_id"])
     if alert.status != "investigating":
