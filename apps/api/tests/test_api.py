@@ -1,23 +1,39 @@
+import csv
 import io
+import os
+from datetime import date, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from app.db import Base, get_db
 from app.main import app
 
+
 @pytest.fixture()
 def client():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    database_url = os.getenv("DATABASE_URL", "")
+    if database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+        engine = create_engine(database_url, pool_pre_ping=True)
+    else:
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
     TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     Base.metadata.create_all(bind=engine)
+
     def override_get_db():
         db = TestingSession()
         try:
             yield db
         finally:
             db.close()
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
@@ -25,9 +41,11 @@ def client():
     Base.metadata.drop_all(bind=engine)
     engine.dispose()
 
+
 def csv_file(rows):
     header = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     return (header + rows).encode()
+
 
 def test_import_persists_and_is_idempotent(client):
     payload = csv_file(
@@ -43,6 +61,7 @@ def test_import_persists_and_is_idempotent(client):
     dashboard = client.get("/api/v1/dashboard").json()
     assert dashboard["community_observations"] == 2
 
+
 def test_import_generates_persisted_candidate_alert(client):
     lines = "".join(
         f"community,C002,SYNTHETIC,2026-02-{day:02d},weekly_reports,{value},5000,reports\n"
@@ -55,3 +74,58 @@ def test_import_generates_persisted_candidate_alert(client):
     assert len(alerts) == 1
     assert alerts[0]["status"] == "pending_review"
     assert alerts[0]["baseline"] == 10.0
+
+
+def test_end_to_end_community_and_workforce_alerts(client):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["domain", "group_code", "source_code", "observed_date", "indicator", "value", "denominator", "unit"])
+    start = date(2026, 1, 5)
+    for week in range(9):
+        observed = (start + timedelta(days=week * 7)).isoformat()
+        community_value = ([10, 11] * 4)[week] if week < 8 else 35
+        symptom_value = ([4, 5] * 4)[week] if week < 8 else 18
+        heat_value = ([30, 31] * 4)[week] if week < 8 else 40
+        writer.writerow(["community", "C-DEMO", "SYNTHETIC", observed, "weekly_febrile_illness_reports", community_value, 5000, "reports"])
+        writer.writerow(["workforce", "W-DEMO", "SYNTHETIC", observed, "weekly_heat_related_symptom_reports", symptom_value, 250, "reports"])
+        writer.writerow(["workforce", "W-DEMO", "SYNTHETIC", observed, "weekly_mean_heat_index", heat_value, "", "celsius"])
+    payload = output.getvalue().encode()
+
+    imported = client.post("/api/v1/observations/import", files={"file": ("both-domains.csv", io.BytesIO(payload), "text/csv")})
+    assert imported.status_code == 200, imported.text
+    result = imported.json()
+    assert result["accepted"] == 27
+    assert result["rejected"] == 0
+    assert result["alerts_created"] == 3
+
+    duplicate = client.post("/api/v1/observations/import", files={"file": ("both-domains.csv", io.BytesIO(payload), "text/csv")})
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["accepted"] == 0
+    assert duplicate.json()["duplicates"] == 27
+    assert duplicate.json()["alerts_created"] == 0
+
+    dashboard = client.get("/api/v1/dashboard")
+    assert dashboard.status_code == 200
+    metrics = dashboard.json()
+    assert metrics["community_observations"] == 9
+    assert metrics["workforce_observations"] == 18
+    assert metrics["pending_alerts"] == 3
+
+    alerts = client.get("/api/v1/alerts").json()["items"]
+    assert len(alerts) == 3
+    assert {item["domain"] for item in alerts} == {"community", "workforce"}
+    assert all(item["history_count"] == 8 for item in alerts)
+
+
+def test_workforce_cohort_below_minimum_is_suppressed(client):
+    lines = "".join(
+        f"workforce,W-SMALL,SYNTHETIC,2026-03-{day:02d},weekly_heat_related_symptom_reports,{value},10,reports\n"
+        for day, value in [(1, 4), (8, 5), (15, 4), (22, 5), (29, 30)]
+    )
+    response = client.post("/api/v1/observations/import", files={"file": ("small-cohort.csv", io.BytesIO(csv_file(lines)), "text/csv")})
+    assert response.status_code == 200
+    assert response.json()["accepted"] == 0
+    assert response.json()["rejected"] == 5
+    assert response.json()["alerts_created"] == 0
+    assert client.get("/api/v1/alerts").json()["items"] == []
+    assert client.get("/api/v1/dashboard").json()["workforce_observations"] == 0

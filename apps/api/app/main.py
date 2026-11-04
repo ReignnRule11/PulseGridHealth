@@ -96,7 +96,17 @@ def dashboard(db: Session = Depends(get_db)):
     demo_only()
     community_count = db.scalar(select(func.count()).select_from(HealthObservation).where(HealthObservation.community_id.is_not(None))) or 0
     workforce_count = db.scalar(select(func.count()).select_from(HealthObservation).join(WorkforceGroup).where(WorkforceGroup.cohort_size >= settings.min_workforce_cohort_size)) or 0
-    alert_count = db.scalar(select(func.count()).select_from(Alert).where(Alert.status == "pending_review")) or 0
+    alert_count = db.scalar(
+        select(func.count()).select_from(Alert)
+        .join(DetectionResult, Alert.detection_id == DetectionResult.id)
+        .join(HealthObservation, DetectionResult.observation_id == HealthObservation.id)
+        .outerjoin(WorkforceGroup, HealthObservation.workforce_group_id == WorkforceGroup.id)
+        .where(Alert.status == "pending_review")
+        .where(and_(
+            HealthObservation.community_id.is_not(None)
+            | (WorkforceGroup.cohort_size >= settings.min_workforce_cohort_size)
+        ))
+    ) or 0
     latest = db.execute(
         select(HealthObservation, Community.region_code, WorkforceGroup.location_code)
         .outerjoin(Community, HealthObservation.community_id == Community.id)
