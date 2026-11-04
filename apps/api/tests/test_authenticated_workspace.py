@@ -93,6 +93,8 @@ def test_role_scoped_workspace_reads_ingestion_review_and_csrf(client):
     accept(client, reviewer_token, "Health Reviewer", "Reviewer-Password-2026!")
     accept(client, analyst_token, "Data Analyst", "Analyst-Password-2026!")
     accept(client, viewer_token, "Read Only Viewer", "Viewer-Password-2026!")
+    # Invitation acceptance is a pre-auth flow; refresh the current admin browser token.
+    admin_csrf = csrf(client)
 
     # Seed a candidate alert as the organization administrator.
     rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
