@@ -1,4 +1,5 @@
 import UploadForm from "../components/upload-form";
+import ReviewPanel from "../components/review-panel";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -9,7 +10,7 @@ type Dashboard = {
   recent_observations: Array<{id:string;domain:string;group_code:string;observed_date:string;indicator:string;value:number;unit:string}>;
 };
 
-type AlertItem = {id:string;domain:string;group_code:string;observed_date:string;indicator:string;value:number;unit:string;baseline:number|null;score:number|null;severity:string;explanation:string};
+type AlertItem = {id:string;domain:string;group_code:string;observed_date:string;indicator:string;value:number;unit:string;baseline:number|null;score:number|null;severity:string;status:string;explanation:string};
 
 async function getJson<T>(path: string, fallback: T): Promise<T> {
   try {
@@ -38,9 +39,7 @@ export default async function Home() {
     <section className="card section"><h2>Data ingestion</h2><p className="muted">Upload only authorised, aggregate CSV data. Never upload identifiable patient or employee records.</p><UploadForm /></section>
     <section className="card section"><h2>Candidate alerts</h2>
       {alerts.items.length === 0 ? <p className="muted">No candidate alerts currently available. Import the synthetic datasets to populate this view.</p> :
-      <div className="table-wrap"><table><thead><tr><th>Domain / group</th><th>Observation</th><th>Value</th><th>Baseline</th><th>Score</th><th>Review status</th></tr></thead><tbody>
-      {alerts.items.map((item) => <tr key={item.id}><td>{item.domain} / {item.group_code}</td><td>{item.indicator}<br/><small>{item.observed_date}</small></td><td>{item.value} {item.unit}</td><td>{item.baseline ?? "—"}</td><td>{item.score ?? "—"}</td><td><span className="pending">{item.severity} · pending review</span></td></tr>)}
-      </tbody></table></div>}
+      <ReviewPanel initialAlerts={alerts.items} />}
     </section>
     <section className="card section"><h2>Recent observations</h2>
       {dashboard.recent_observations.length === 0 ? <p className="muted">No data imported yet.</p> :
