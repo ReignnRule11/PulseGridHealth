@@ -51,10 +51,10 @@ def _bootstrap(client, email="admin@example.org"):
     })
 
 
-def _login(client, email="admin@example.org"):
+def _login(client, email="admin@example.org", password="Strong-Password-2026!"):
     token = _csrf(client)
     return client.post("/api/v1/auth/login", headers={"X-CSRF-Token": token}, json={
-        "email": email, "password": "Strong-Password-2026!"
+        "email": email, "password": password
     })
 
 
@@ -145,7 +145,7 @@ def test_organization_data_isolation_and_membership_enforcement(auth_client):
         files={"file": ("tenant.csv", io.BytesIO(rows.encode()), "text/csv")})
     assert imported.status_code == 200, imported.text
     assert imported.json()["accepted"] == 8
-    assert _login(client, email="second-admin@example.org").status_code == 200
+    assert _login(client, email="second-admin@example.org", password="Second-Strong-Password-2026!").status_code == 200
     dashboard = client.get("/api/v1/dashboard", headers={"X-Organization-ID": second_org})
     assert dashboard.status_code == 200
     assert dashboard.json()["community_observations"] == 0
