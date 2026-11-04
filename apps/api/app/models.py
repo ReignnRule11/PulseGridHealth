@@ -1,8 +1,8 @@
 import uuid
-from datetime import datetime, date
+from datetime import datetime
 from sqlalchemy import (
     String, Date, DateTime, Numeric, Integer, ForeignKey, CheckConstraint,
-    UniqueConstraint, JSON, Float
+    UniqueConstraint, JSON, Float, Index
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
@@ -10,7 +10,7 @@ from app.db import Base
 class Organization(Base):
     __tablename__ = "organizations"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
     organization_type: Mapped[str] = mapped_column(String(80), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -30,11 +30,13 @@ class WorkforceGroup(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     sector: Mapped[str] = mapped_column(String(100), nullable=False)
     location_code: Mapped[str | None] = mapped_column(String(80))
+    cohort_size: Mapped[int | None] = mapped_column(Integer)
+    __table_args__ = (UniqueConstraint("organization_id", "location_code"),)
 
 class DataSource(Base):
     __tablename__ = "data_sources"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    source_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    source_name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
     source_type: Mapped[str] = mapped_column(String(80), nullable=False)
     provenance: Mapped[str | None] = mapped_column(String(500))
     authorised: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -45,7 +47,7 @@ class HealthObservation(Base):
     community_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("communities.id"))
     workforce_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workforce_groups.id"))
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_sources.id"), nullable=False)
-    observed_date: Mapped[date] = mapped_column(Date, nullable=False)
+    observed_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     indicator: Mapped[str] = mapped_column(String(120), nullable=False)
     value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
     denominator: Mapped[int | None] = mapped_column(Integer)
@@ -55,15 +57,20 @@ class HealthObservation(Base):
         CheckConstraint("(community_id IS NOT NULL AND workforce_group_id IS NULL) OR (community_id IS NULL AND workforce_group_id IS NOT NULL)", name="ck_observation_one_domain"),
         CheckConstraint("value >= 0", name="ck_observation_nonnegative"),
         CheckConstraint("denominator IS NULL OR denominator > 0", name="ck_observation_denominator_positive"),
-        UniqueConstraint("source_id", "community_id", "workforce_group_id", "observed_date", "indicator", name="uq_observation_source_group_date_indicator"),
+        Index("uq_community_observation", "source_id", "community_id", "observed_date", "indicator", unique=True, postgresql_where=__import__("sqlalchemy").text("community_id IS NOT NULL"), sqlite_where=__import__("sqlalchemy").text("community_id IS NOT NULL")),
+        Index("uq_workforce_observation", "source_id", "workforce_group_id", "observed_date", "indicator", unique=True, postgresql_where=__import__("sqlalchemy").text("workforce_group_id IS NOT NULL"), sqlite_where=__import__("sqlalchemy").text("workforce_group_id IS NOT NULL")),
+        Index("ix_observations_date_indicator", "observed_date", "indicator"),
     )
 
 class DetectionResult(Base):
     __tablename__ = "detection_results"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    observation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("health_observations.id"), nullable=False)
+    observation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("health_observations.id"), nullable=False, unique=True)
     baseline: Mapped[float | None] = mapped_column(Float)
     anomaly_score: Mapped[float | None] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(String(80), nullable=False)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False)
+    history_count: Mapped[int] = mapped_column(Integer, nullable=False)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     model_version: Mapped[str] = mapped_column(String(40), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

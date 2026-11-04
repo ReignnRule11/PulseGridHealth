@@ -8,5 +8,6 @@ class Settings(BaseSettings):
     max_upload_mb: int = 5
     min_baseline_points: int = 6
     anomaly_z_threshold: float = 3.5
+    min_workforce_cohort_size: int = 20
 
 settings = Settings()

@@ -12,7 +12,7 @@ def upgrade():
     op.create_table(
         "organizations",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("name", sa.String(200), nullable=False),
+        sa.Column("name", sa.String(200), nullable=False, unique=True),
         sa.Column("organization_type", sa.String(80), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
     )
@@ -32,11 +32,13 @@ def upgrade():
         sa.Column("name", sa.String(160), nullable=False),
         sa.Column("sector", sa.String(100), nullable=False),
         sa.Column("location_code", sa.String(80)),
+        sa.Column("cohort_size", sa.Integer()),
+        sa.UniqueConstraint("organization_id", "location_code"),
     )
     op.create_table(
         "data_sources",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("source_name", sa.String(160), nullable=False),
+        sa.Column("source_name", sa.String(160), nullable=False, unique=True),
         sa.Column("source_type", sa.String(80), nullable=False),
         sa.Column("provenance", sa.String(500)),
         sa.Column("authorised", sa.Boolean(), server_default=sa.false(), nullable=False),
@@ -56,15 +58,19 @@ def upgrade():
         sa.CheckConstraint("(community_id IS NOT NULL AND workforce_group_id IS NULL) OR (community_id IS NULL AND workforce_group_id IS NOT NULL)", name="ck_observation_one_domain"),
         sa.CheckConstraint("value >= 0", name="ck_observation_nonnegative"),
         sa.CheckConstraint("denominator IS NULL OR denominator > 0", name="ck_observation_denominator_positive"),
-        sa.UniqueConstraint("source_id", "community_id", "workforce_group_id", "observed_date", "indicator", name="uq_observation_source_group_date_indicator"),
     )
+    op.create_index("uq_community_observation", "health_observations", ["source_id", "community_id", "observed_date", "indicator"], unique=True, postgresql_where=sa.text("community_id IS NOT NULL"))
+    op.create_index("uq_workforce_observation", "health_observations", ["source_id", "workforce_group_id", "observed_date", "indicator"], unique=True, postgresql_where=sa.text("workforce_group_id IS NOT NULL"))
     op.create_index("ix_observations_date_indicator", "health_observations", ["observed_date", "indicator"])
     op.create_table(
         "detection_results",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("observation_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("health_observations.id"), nullable=False),
+        sa.Column("observation_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("health_observations.id"), nullable=False, unique=True),
         sa.Column("baseline", sa.Float()),
         sa.Column("anomaly_score", sa.Float()),
+        sa.Column("reason", sa.String(80), nullable=False),
+        sa.Column("threshold", sa.Float(), nullable=False),
+        sa.Column("history_count", sa.Integer(), nullable=False),
         sa.Column("model_name", sa.String(100), nullable=False),
         sa.Column("model_version", sa.String(40), nullable=False),
         sa.Column("detected_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
@@ -72,7 +78,7 @@ def upgrade():
     op.create_table(
         "alerts",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("detection_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("detection_results.id"), unique=True, nullable=False)
+        sa.Column("detection_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("detection_results.id"), unique=True, nullable=False),
         sa.Column("severity", sa.String(20), nullable=False),
         sa.Column("status", sa.String(30), server_default="pending_review", nullable=False),
         sa.Column("explanation", sa.String(2000)),
@@ -83,6 +89,8 @@ def downgrade():
     op.drop_table("alerts")
     op.drop_table("detection_results")
     op.drop_index("ix_observations_date_indicator", table_name="health_observations")
+    op.drop_index("uq_workforce_observation", table_name="health_observations")
+    op.drop_index("uq_community_observation", table_name="health_observations")
     op.drop_table("health_observations")
     op.drop_table("data_sources")
     op.drop_table("workforce_groups")

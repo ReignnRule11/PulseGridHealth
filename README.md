@@ -2,146 +2,80 @@
 
 Population & Workforce Health Intelligence Platform.
 
-Phase 1 foundation: Next.js + FastAPI + PostgreSQL, synthetic aggregate datasets,
-validated ingestion, and statistical anomaly detection.
+PulseGrid Health is an explainable early-warning prototype for aggregate community and workforce health signals. The Phase 1 MVP connects CSV ingestion, PostgreSQL persistence, robust statistical screening, evidence-backed candidate alerts, and a live dashboard.
 
-> This is a development scaffold, not a clinically validated or production-ready
-> medical system. Use synthetic or appropriately authorised aggregate data only.
-> An anomaly is a statistical signal, not a diagnosis or outbreak declaration.
+> **Demonstration boundary:** use synthetic or explicitly authorised aggregate data only. Do not upload patient- or employee-identifiable records. Statistical candidates are not diagnoses, outbreak declarations, or autonomous response decisions. Human review is mandatory.
 
-## MVP scope
+## MVP capabilities
 
-- Community aggregate health observations.
-- Workforce-group aggregate health observations.
-- Environmental indicators associated with workforce groups.
-- CSV ingestion with strict schema validation.
-- Rolling baseline and robust z-score detection.
-- Human-reviewed alerts (planned for subsequent Phase 1 increment).
+- Community aggregate weekly health observations.
+- Workforce-group aggregate symptom and environmental observations.
+- Strict CSV validation, bounded uploads, row-level errors, and duplicate protection.
+- PostgreSQL persistence through SQLAlchemy and Alembic.
+- Historical median/MAD anomaly screening with minimum history and zero-MAD safeguards.
+- Stored detection evidence and pending-review candidate alerts.
+- Dashboard summary, recent observations, and alert evidence.
+- Workforce group suppression below the configured minimum cohort size.
 
 ## Repository layout
 
-```text
-apps/
-  api/                 FastAPI backend
-  web/                 Next.js frontend
-database/
-  migrations/          Alembic migrations
-datasets/
-  synthetic/           Generated demo CSVs
-docs/                  Product and engineering docs
-scripts/               Dataset generation utilities
-.github/workflows/     CI
-```
+- `apps/api`: FastAPI, SQLAlchemy, Alembic, and tests.
+- `apps/web`: Next.js dashboard and CSV import interface.
+- `scripts`: deterministic synthetic data generation.
+- `docs`: architecture, security, evaluation, and implementation notes.
 
-## Prerequisites
+## Run locally
 
-- Node.js 22+
-- Python 3.11+
-- PostgreSQL 15+ (hosted PostgreSQL is acceptable)
-- Git and GitHub account
+Requirements: Python 3.11+, Node.js 22+, and PostgreSQL 15+. Docker is not required.
 
-Docker is not required. For a phone-first workflow, create the repository on GitHub,
-edit files in GitHub's web editor or Codespaces if available, and use a hosted
-PostgreSQL provider. Never commit database credentials.
+1. Create a PostgreSQL database and set `DATABASE_URL` from `.env.example`. Never commit the real value.
+2. Backend:
+   ```bash
+   cd apps/api
+   python -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   alembic upgrade head
+   uvicorn app.main:app --reload
+   ```
+3. Generate the repeatable demo data from the repository root:
+   ```bash
+   python scripts/generate_synthetic_data.py --output datasets/synthetic
+   ```
+4. Frontend in a second terminal:
+   ```bash
+   cd apps/web
+   echo 'NEXT_PUBLIC_API_URL=http://localhost:8000' > .env.local
+   npm install
+   npm run dev
+   ```
+5. Open the Next.js app and import both generated CSV files.
 
-## Local setup
+## CSV contract
 
-### 1. Clone and configure
+Exact columns: `domain,group_code,source_code,observed_date,indicator,value,denominator,unit`.
 
-```bash
-git clone https://github.com/<YOUR_GITHUB_USERNAME>/PulseGrid-Health.git
-cd PulseGrid-Health
-cp .env.example .env
-```
+Domains are `community` or `workforce`. Values must be finite and non-negative; denominator, when supplied, must be positive. Workforce group data is suppressed when the known cohort size is below `MIN_WORKFORCE_COHORT_SIZE` (default 20).
 
-Set `DATABASE_URL` to a PostgreSQL connection string. Use a dedicated development
-database and a separate test database.
-
-### 2. Backend
-
-```bash
-cd apps/api
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux/Termux: source .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
-uvicorn app.main:app --reload
-```
-
-API health check: `GET http://127.0.0.1:8000/health`
-
-### 3. Generate synthetic data
-
-From repository root:
-
-```bash
-python scripts/generate_synthetic_data.py --output datasets/synthetic
-```
-
-The generator creates:
-- `community_observations.csv`
-- `workforce_observations.csv`
-
-All records are synthetic and include deliberately planted anomalies for
-reproducible evaluation.
-
-### 4. Frontend
-
-```bash
-cd apps/web
-npm install
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-### 5. Run tests
-
-```bash
-cd apps/api
-pytest
-```
-
-## API endpoints in this scaffold
+## API
 
 - `GET /health`
-- `POST /api/v1/observations/import` — CSV upload
-- `POST /api/v1/detection/run` — run baseline detector on stored observations
-- `GET /api/v1/observations` — list aggregate observations
-- `GET /api/v1/alerts` — list candidate alerts
+- `GET /api/v1/dashboard`
+- `GET /api/v1/alerts?status=pending_review`
+- `POST /api/v1/observations/import` (multipart field `file`)
+- `POST /api/v1/detection/run`
 
-Authentication and organisation-scoped authorisation are required before any
-non-synthetic or multi-tenant deployment. The initial scaffold intentionally
-keeps the demo boundary explicit; do not expose it publicly with real data.
+## Security boundary
 
-## Security rules
+This is a local/synthetic demonstration MVP, not a production health-data service. In `APP_ENV=production`, data and dashboard endpoints fail closed until authentication, server-side RBAC, tenant isolation/RLS, audit controls, retention policies, and a security review are implemented. Keep hosted demo data synthetic. Configure CORS to the exact frontend origin.
 
-- Never commit `.env`, API keys, database URLs, tokens, or private datasets.
-- Use aggregate observations; do not upload patient or employee identifiable data.
-- Enforce tenant-scoped access in the API and database before production.
-- Apply minimum cohort-size suppression to workforce and sensitive geographic views.
-- Keep source provenance, model version, detection evidence, and audit history.
-- Validate CSV size, columns, dates, units, non-negative values, and mutually
-  exclusive community/workforce identifiers.
-- AI explanations must be grounded only in stored detection evidence.
-- Human reviewers own all investigation and response decisions.
+## Detection and evaluation
 
-## Detection methodology
+The detector uses the prior observations for the same group and indicator, a trailing history window, median baseline, and MAD-scaled robust score. It never uses future observations. Minimum history defaults to six points; zero MAD is handled without inventing a score. Evaluate chronologically and report precision, recall, F1, false alerts per group-week, and detection delay separately for community and workforce domains.
 
-The initial detector uses a trailing historical window and a robust median/MAD
-baseline. It is intended for prototype anomaly screening, not epidemiological
-forecasting. Minimum history and denominator checks are enforced. Results must
-be evaluated chronologically and separately by domain.
+## Tests
 
-## Before public deployment
-
-This scaffold is not yet production ready. Complete:
-1. Authentication, secure sessions, RBAC, and tenant isolation.
-2. PostgreSQL row-level security or equivalent server-enforced tenant controls.
-3. Audit logging for privileged actions.
-4. Rate limits, upload limits, malware scanning where applicable.
-5. Data retention, deletion, consent, and incident-response policies.
-6. Independent security review and clinical/public-health review.
-7. Monitoring, backups, restore tests, and migration rollback strategy.
-8. Formal validation on representative, authorised data.
+```bash
+cd apps/api
+PYTHONPATH=. pytest
+```
