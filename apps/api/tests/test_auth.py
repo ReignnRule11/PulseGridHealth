@@ -137,8 +137,8 @@ def test_organization_data_isolation_and_membership_enforcement(auth_client):
     assert second.status_code == 200
     second_org = second.json()["organization_id"]
     csrf = _csrf(client)
-    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
-    rows += "".join(f"community,ONLY-FIRST,SRC,2026-06-{day:02d},weekly_reports,{value},5000,reports\\n"
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
+    rows += "".join(f"community,ONLY-FIRST,SRC,2026-06-{day:02d},weekly_reports,{value},5000,reports\n"
                     for day, value in [(1,10),(2,11),(3,9),(4,10),(5,11),(6,10),(7,9),(8,35)])
     imported = client.post("/api/v1/observations/import",
         headers={"X-CSRF-Token": csrf, "X-Organization-ID": first_org},
