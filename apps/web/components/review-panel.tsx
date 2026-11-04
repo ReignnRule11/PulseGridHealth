@@ -12,7 +12,7 @@ export default function ReviewPanel({ initialAlerts }: { initialAlerts: AlertIte
   const [findings, setFindings] = useState<Record<string,string>>({});
   const [rationales, setRationales] = useState<Record<string,string>>({});
   const [actions, setActions] = useState<Record<string,string>>({});
-  const [history, setHistory] = useState<Record<string,unknown>>({});
+  const [history, setHistory] = useState<Record<string,string>>({});
   async function post(id:string, endpoint:string, body?:object) {
     setBusy(id); setMessage("");
     try {
@@ -50,8 +50,8 @@ export default function ReviewPanel({ initialAlerts }: { initialAlerts: AlertIte
         <label>Resolution rationale<textarea value={rationales[alert.id] ?? ""} onChange={e=>setRationales(v=>({...v,[alert.id]:e.target.value}))} placeholder="Explain the evidence-based disposition" /></label>
         <button disabled={!!busy || (rationales[alert.id] ?? "").trim().length < 10} onClick={() => post(alert.id,"resolve",{rationale:rationales[alert.id],disposition:"monitoring"})}>Close review</button>
       </div>}
-      <button className="secondary-button" disabled={!!busy} onClick={async () => { const r=await fetch(`${API}/api/v1/alerts/${alert.id}/history`); if(r.ok) { const data=await r.json(); setHistory(v=>({...v,[alert.id]:data})); } }}>View review history</button>
-      {history[alert.id] && <pre className="history-view">{JSON.stringify(history[alert.id],null,2)}</pre>}
+      <button className="secondary-button" disabled={!!busy} onClick={async () => { const r=await fetch(`${API}/api/v1/alerts/${alert.id}/history`); if(r.ok) { const data=await r.json(); setHistory(v=>({...v,[alert.id]:JSON.stringify(data,null,2)})); } }}>View review history</button>
+      {history[alert.id] && <pre className="history-view">{history[alert.id]}</pre>}
       {busy === alert.id && <small>Saving…</small>}
     </article>)}
   </div>;

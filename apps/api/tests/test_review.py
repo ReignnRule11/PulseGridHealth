@@ -1,5 +1,35 @@
-from datetime import date
 import io
+import os
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from app.db import Base, get_db
+from app.main import app
+
+
+@pytest.fixture()
+def client():
+    database_url = os.getenv("DATABASE_URL", "")
+    if database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+        engine = create_engine(database_url, pool_pre_ping=True)
+    else:
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    Base.metadata.create_all(bind=engine)
+    def override_get_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 def _seed_alert(client):
