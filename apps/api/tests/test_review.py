@@ -4,10 +4,10 @@ import io
 
 def _seed_alert(client):
     rows = "".join(
-        f"community,REVIEW-GROUP,REVIEW-SOURCE,2026-05-{day:02d},weekly_reports,{value},5000,reports\\n"
+        f"community,REVIEW-GROUP,REVIEW-SOURCE,2026-05-{day:02d},weekly_reports,{value},5000,reports\n"
         for day, value in [(1,10),(2,11),(3,9),(4,10),(5,11),(6,10),(7,9),(8,35)]
     )
-    header = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    header = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     result = client.post("/api/v1/observations/import", files={"file": ("review.csv", io.BytesIO((header + rows).encode()), "text/csv")})
     assert result.status_code == 200
     return client.get("/api/v1/alerts").json()["items"][0]["id"]

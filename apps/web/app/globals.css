@@ -30,3 +30,6 @@ small { color:#667085; }
 .review-form button, .review-card > button { justify-self:start; cursor:pointer; }
 .review-message { color:#175cd3; }
 @media (max-width:600px) { main { padding:20px 12px; } .review-heading { align-items:flex-start; flex-direction:column; } }
+
+.secondary-button { margin-top:10px; background:#475467; }
+.history-view { white-space:pre-wrap; overflow-wrap:anywhere; background:#f2f4f7; padding:12px; border-radius:8px; font-size:12px; }

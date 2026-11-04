@@ -24,7 +24,7 @@ export default async function Home() {
   const dashboard = await getJson<Dashboard>("/api/v1/dashboard", {
     community_observations:0, workforce_observations:0, pending_alerts:0, recent_observations:[]
   });
-  const alerts = await getJson<{items:AlertItem[]}>("/api/v1/alerts", {items:[]});
+  const alerts = await getJson<{items:AlertItem[]}>("/api/v1/alerts?status=all", {items:[]});
   return <main>
     <header>
       <div><h1>PulseGrid Health</h1><p className="muted">Population &amp; Workforce Health Intelligence</p></div>

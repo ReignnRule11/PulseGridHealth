@@ -12,6 +12,7 @@ export default function ReviewPanel({ initialAlerts }: { initialAlerts: AlertIte
   const [findings, setFindings] = useState<Record<string,string>>({});
   const [rationales, setRationales] = useState<Record<string,string>>({});
   const [actions, setActions] = useState<Record<string,string>>({});
+  const [history, setHistory] = useState<Record<string,unknown>>({});
   async function post(id:string, endpoint:string, body?:object) {
     setBusy(id); setMessage("");
     try {
@@ -20,11 +21,11 @@ export default function ReviewPanel({ initialAlerts }: { initialAlerts: AlertIte
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail ?? "Request failed");
-      setAlerts(current => current.map(a => a.id === id ? {...a, status:data.status ?? (endpoint === "resolve" ? "resolved" : a.status)} : a));
+      setAlerts(current => current.map(a => a.id === id ? {...a, status:endpoint === "investigation" ? "investigating" : (data.status ?? a.status)} : a));
       setMessage("Review update saved.");
       if (endpoint === "acknowledge" || endpoint === "investigation" || endpoint === "resolve") {
-        const refreshed = await fetch(`${API}/api/v1/alerts?status=${endpoint === "resolve" ? "resolved" : "pending_review"}`, {cache:"no-store"});
-        if (refreshed.ok && endpoint !== "resolve") {
+        const refreshed = await fetch(`${API}/api/v1/alerts?status=all`, {cache:"no-store"});
+        if (refreshed.ok) {
           const result = await refreshed.json();
           setAlerts(current => [...current.filter(a => a.id !== id), ...(result.items as AlertItem[]).filter(a => !current.some(c => c.id === a.id))]);
         }
@@ -49,6 +50,8 @@ export default function ReviewPanel({ initialAlerts }: { initialAlerts: AlertIte
         <label>Resolution rationale<textarea value={rationales[alert.id] ?? ""} onChange={e=>setRationales(v=>({...v,[alert.id]:e.target.value}))} placeholder="Explain the evidence-based disposition" /></label>
         <button disabled={!!busy || (rationales[alert.id] ?? "").trim().length < 10} onClick={() => post(alert.id,"resolve",{rationale:rationales[alert.id],disposition:"monitoring"})}>Close review</button>
       </div>}
+      <button className="secondary-button" disabled={!!busy} onClick={async () => { const r=await fetch(`${API}/api/v1/alerts/${alert.id}/history`); if(r.ok) { const data=await r.json(); setHistory(v=>({...v,[alert.id]:data})); } }}>View review history</button>
+      {history[alert.id] && <pre className="history-view">{JSON.stringify(history[alert.id],null,2)}</pre>}
       {busy === alert.id && <small>Saving…</small>}
     </article>)}
   </div>;

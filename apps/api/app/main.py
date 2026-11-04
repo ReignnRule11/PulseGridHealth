@@ -138,7 +138,7 @@ def list_alerts(status: str = Query(default="pending_review", max_length=30), li
         select(Alert, DetectionResult, HealthObservation)
         .join(DetectionResult, Alert.detection_id == DetectionResult.id)
         .join(HealthObservation, DetectionResult.observation_id == HealthObservation.id)
-        .where(Alert.status == status).order_by(Alert.created_at.desc()).limit(limit)
+        .where(Alert.status == status if status != "all" else True).order_by(Alert.created_at.desc()).limit(limit)
     ).all()
     result = []
     for alert, detection, obs in rows:
