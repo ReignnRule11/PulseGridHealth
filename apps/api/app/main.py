@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db import get_db
 from app.models import Organization, Community, WorkforceGroup, DataSource, HealthObservation, DetectionResult, Alert
-from app.security import router as security_router, get_request_tenant, enforce_roles
+from app.security import router as security_router, get_request_tenant, enforce_roles, require_tenant_csrf
 from app.review import router as review_router
 from app.services.ingestion import parse_csv
 from app.services.detection import robust_anomaly
@@ -172,7 +172,8 @@ def list_alerts(status: str = Query(default="pending_review", max_length=30),
 
 @app.post("/api/v1/observations/import")
 async def import_observations(file: UploadFile = File(...),
-                              context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+                              context: dict = Depends(get_request_tenant),
+                              csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "analyst")
     org_id = context["organization_id"]
     if file.content_type not in ("text/csv", "application/vnd.ms-excel", "application/octet-stream"):
@@ -222,7 +223,8 @@ async def import_observations(file: UploadFile = File(...),
 
 
 @app.post("/api/v1/detection/run")
-def run_detection(context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+def run_detection(context: dict = Depends(get_request_tenant),
+                  csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "analyst")
     org_id = context["organization_id"]
     observations = db.scalars(select(HealthObservation)
