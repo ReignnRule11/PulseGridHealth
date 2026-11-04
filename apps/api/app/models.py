@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from sqlalchemy import (
     String, Date, DateTime, Numeric, Integer, ForeignKey, CheckConstraint,
     UniqueConstraint, JSON, Float, Index
@@ -47,7 +47,7 @@ class HealthObservation(Base):
     community_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("communities.id"))
     workforce_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workforce_groups.id"))
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_sources.id"), nullable=False)
-    observed_date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    observed_date: Mapped[date] = mapped_column(Date, nullable=False)
     indicator: Mapped[str] = mapped_column(String(120), nullable=False)
     value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
     denominator: Mapped[int | None] = mapped_column(Integer)

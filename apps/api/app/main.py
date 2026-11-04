@@ -69,16 +69,18 @@ def _detect_for_observation(db: Session, observation: HealthObservation) -> int:
     result = robust_anomaly(history, float(observation.value),
                             min_history=settings.min_baseline_points,
                             threshold=settings.anomaly_z_threshold)
-    db.add(DetectionResult(
+    detection = DetectionResult(
         observation_id=observation.id, baseline=result.baseline,
         anomaly_score=result.anomaly_score, reason=result.reason,
         threshold=settings.anomaly_z_threshold, history_count=len(history),
         model_name="median_mad", model_version="0.2.0",
-    ))
+    )
+    db.add(detection)
+    db.flush()
     if result.is_candidate:
         severity = "high" if (result.anomaly_score or 0) >= settings.anomaly_z_threshold * 2 else "medium"
         db.add(Alert(
-            detection_id=db.scalar(select(DetectionResult.id).where(DetectionResult.observation_id == observation.id)),
+            detection_id=detection.id,
             severity=severity, status="pending_review",
             explanation=f"{observation.indicator} measured {float(observation.value):g} {observation.unit}; historical median {result.baseline:g}; robust score {result.anomaly_score:g}. Candidate signal only; human review required."
         ))
