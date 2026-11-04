@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Alert, Investigation, ResponseAction, AuditLog
 from app.review_schemas import FindingsIn, ResolutionIn, ResponseActionIn
-from app.security import get_request_tenant, enforce_roles
+from app.security import get_request_tenant, enforce_roles, require_tenant_csrf
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["human review"])
 
@@ -32,7 +32,7 @@ def _audit(db: Session, alert: Alert, context: dict, event: str, detail: dict | 
 
 
 @router.post("/{alert_id}/acknowledge")
-def acknowledge_alert(alert_id: UUID, context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+def acknowledge_alert(alert_id: UUID, context: dict = Depends(get_request_tenant), csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "reviewer")
     alert = _alert(db, alert_id, context["organization_id"])
     if alert.status != "pending_review":
@@ -45,7 +45,7 @@ def acknowledge_alert(alert_id: UUID, context: dict = Depends(get_request_tenant
 
 
 @router.post("/{alert_id}/investigation")
-def start_investigation(alert_id: UUID, context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+def start_investigation(alert_id: UUID, context: dict = Depends(get_request_tenant), csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "reviewer")
     alert = _alert(db, alert_id, context["organization_id"])
     if alert.status != "acknowledged":
