@@ -119,3 +119,36 @@ def test_membership_is_required_for_selected_organization(auth_client):
                  "X-Organization-ID": "00000000-0000-0000-0000-000000000001"},
         json={"email": "outsider@example.org", "role": "viewer"})
     assert denied.status_code == 403
+
+
+
+def test_organization_data_isolation_and_membership_enforcement(auth_client):
+    import io
+    client = auth_client
+    assert _bootstrap(client, email="first-admin@example.org").status_code == 200
+    first_login = _login(client, email="first-admin@example.org")
+    first_org = first_login.json()["organizations"][0]["id"]
+    csrf = _csrf(client)
+    second = client.post("/api/v1/auth/bootstrap", headers={
+        "X-CSRF-Token": csrf, "X-Bootstrap-Token": "test-bootstrap-secret"
+    }, json={"organization_name": "Second Health Authority", "organization_type": "public_health",
+             "admin_email": "second-admin@example.org", "admin_name": "Second Admin",
+             "password": "Second-Strong-Password-2026!"})
+    assert second.status_code == 200
+    second_org = second.json()["organization_id"]
+    csrf = _csrf(client)
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    rows += "".join(f"community,ONLY-FIRST,SRC,2026-06-{day:02d},weekly_reports,{value},5000,reports\\n"
+                    for day, value in [(1,10),(2,11),(3,9),(4,10),(5,11),(6,10),(7,9),(8,35)])
+    imported = client.post("/api/v1/observations/import",
+        headers={"X-CSRF-Token": csrf, "X-Organization-ID": first_org},
+        files={"file": ("tenant.csv", io.BytesIO(rows.encode()), "text/csv")})
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["accepted"] == 8
+    assert _login(client, email="second-admin@example.org").status_code == 200
+    dashboard = client.get("/api/v1/dashboard", headers={"X-Organization-ID": second_org})
+    assert dashboard.status_code == 200
+    assert dashboard.json()["community_observations"] == 0
+    assert dashboard.json()["pending_alerts"] == 0
+    denied = client.get("/api/v1/dashboard", headers={"X-Organization-ID": first_org})
+    assert denied.status_code == 403

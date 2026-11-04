@@ -34,11 +34,10 @@ def upgrade():
         WHERE organization_id IS NULL
     """)
     op.execute("""
-        UPDATE health_observations h SET organization_id =
-          COALESCE(c.organization_id, w.organization_id)
-        FROM communities c FULL JOIN workforce_groups w ON false
-        WHERE (h.community_id = c.id OR h.workforce_group_id = w.id)
-          AND h.organization_id IS NULL
+        UPDATE health_observations h SET organization_id = COALESCE(
+          (SELECT c.organization_id FROM communities c WHERE c.id = h.community_id),
+          (SELECT w.organization_id FROM workforce_groups w WHERE w.id = h.workforce_group_id)
+        ) WHERE h.organization_id IS NULL
     """)
     op.execute("""
         UPDATE detection_results d SET organization_id = h.organization_id

@@ -84,7 +84,7 @@ Authentication endpoints:
 - `POST /api/v1/auth/organizations/{organization_id}/invitations`
 - `POST /api/v1/auth/invitations/accept`
 
-**Phase 2 is not yet production-ready.** Existing health-data, dashboard, import, detection and alert-review routes remain demo-only and continue to fail closed in production. Organization membership and role checks are implemented for identity operations, but tenant scoping and row-level database policies across health observations, alerts, investigations and audit records are the next required implementation step. Add deployment-level rate limiting, TLS, secret rotation, backups, retention controls and an independent security review before real data use.
+**Phase 2 is not yet production-ready.** Existing health-data, dashboard, import, detection and alert-review routes remain demo-only and continue to fail closed in production. Health observations, data sources, detection results, alerts, investigations, response actions and audit events carry organization ownership. PostgreSQL RLS policies enforce the selected organization using transaction-local `app.organization_id`; API requests validate membership and set this context before tenant queries. Analysts can ingest and run detection; reviewers can manage alert investigations; viewers are read-only. Add deployment-level rate limiting, TLS, secret rotation, backups, retention controls and an independent security review before real data use.
 
 ## Security boundary
 
