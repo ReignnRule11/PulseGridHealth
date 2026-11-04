@@ -188,3 +188,10 @@ def test_workforce_without_known_cohort_size_is_suppressed(client):
     assert response.json()["accepted"] == 0
     assert response.json()["rejected"] == 5
     assert client.get("/api/v1/dashboard").json()["workforce_observations"] == 0
+
+
+def test_readiness_probe_confirms_database_connectivity(client):
+    response = client.get("/ready")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    assert response.json()["database"] == "reachable"

@@ -234,3 +234,15 @@ def run_detection(context: dict = Depends(get_request_tenant),
     alerts_created = sum(_detect_for_observation(db, observation) for observation in observations)
     db.commit()
     return {"evaluated": len(observations), "alerts_created": alerts_created}
+
+
+@app.get("/ready")
+def readiness(db: Session = Depends(get_db)):
+    """Readiness probe: confirm the API can reach its configured database."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    try:
+        db.execute(select(1)).scalar_one()
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="database_unavailable") from exc
+    return {"status": "ready", "database": "reachable", "version": app.version}
