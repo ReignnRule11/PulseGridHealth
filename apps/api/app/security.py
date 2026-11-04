@@ -141,9 +141,7 @@ def require_roles(*roles: str):
     return dependency
 
 
-def require_csrf(identity: dict = Depends(get_identity), request: Request = None):
-    if request is None:
-        raise HTTPException(status_code=403, detail="csrf_validation_failed")
+def require_csrf(request: Request, identity: dict = Depends(get_identity)):
     _origin_ok(request)
     cookie = request.cookies.get(CSRF_COOKIE)
     header = request.headers.get("X-CSRF-Token")
@@ -155,9 +153,15 @@ def require_csrf(identity: dict = Depends(get_identity), request: Request = None
 
 
 @router.get("/csrf")
-def issue_csrf(response: Response, request: Request):
+def issue_csrf(response: Response, request: Request, db: Session = Depends(get_db)):
     _origin_ok(request)
     token = secrets.token_urlsafe(32)
+    raw_session = request.cookies.get(SESSION_COOKIE)
+    if raw_session:
+        active_session = db.scalar(select(AuthSession).where(AuthSession.token_hash == _hash_token(raw_session)))
+        if active_session and not active_session.revoked_at and _aware(active_session.expires_at) > _now():
+            active_session.csrf_hash = _hash_token(token)
+            db.commit()
     secure = settings.app_env.lower() == "production"
     response.set_cookie(CSRF_COOKIE, token, httponly=False, secure=secure, samesite="strict", path="/")
     return {"csrf_token": token}
