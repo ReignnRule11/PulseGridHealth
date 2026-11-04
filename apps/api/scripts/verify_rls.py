@@ -21,11 +21,22 @@ with engine.begin() as connection:
     assert len(policies) == len(tenant_tables), policies
     assert all(row.relrowsecurity and row.relforcerowsecurity for row in policies), policies
 
+    connection.execute(text("""
+        DO $ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pulsegrid_rls_test') THEN
+            CREATE ROLE pulsegrid_rls_test NOLOGIN NOSUPERUSER NOBYPASSRLS;
+          END IF;
+        END $
+    """))
+    connection.execute(text("GRANT USAGE ON SCHEMA public TO pulsegrid_rls_test"))
+    connection.execute(text("GRANT SELECT, INSERT ON data_sources TO pulsegrid_rls_test"))
+
     org_a, org_b = uuid.uuid4(), uuid.uuid4()
     connection.execute(text("""
         INSERT INTO organizations (id, name, organization_type, created_at)
         VALUES (:a, :name_a, 'test', now()), (:b, :name_b, 'test', now())
     """), {"a": org_a, "b": org_b, "name_a": f"RLS-A-{org_a}", "name_b": f"RLS-B-{org_b}"})
+    connection.execute(text("SET LOCAL ROLE pulsegrid_rls_test"))
     connection.execute(text("SELECT set_config('app.organization_id', :org, true)"), {"org": str(org_a)})
     connection.execute(text("""
         INSERT INTO data_sources (id, organization_id, source_name, source_type, authorised)
