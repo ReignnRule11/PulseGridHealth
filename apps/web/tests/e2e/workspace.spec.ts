@@ -31,7 +31,7 @@ async function bootstrap(request: APIRequestContext, email: string, organization
 async function signIn(page: Page, email: string, password: string) {
   await page.goto("/");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in securely" }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 }
@@ -101,11 +101,11 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   const otherContext = await browser.newContext();
   try {
     const otherRequest = otherContext.request;
-    const otherOrg = await bootstrap(otherRequest, "other-admin@pulsegrid-e2e.test", "Other E2E Authority");
+    const otherOrg = await bootstrap(otherRequest, `other-admin-${suffix}@pulsegrid-e2e.test`, `Other E2E Authority ${suffix}`);
     const token = await getCsrf(otherRequest);
     const login = await otherRequest.post(`${API}/api/v1/auth/login`, {
       headers: { "X-CSRF-Token": token },
-      data: { email: "other-admin@pulsegrid-e2e.test", password: ADMIN_PASSWORD }
+      data: { email: `other-admin-${suffix}@pulsegrid-e2e.test`, password: ADMIN_PASSWORD }
     });
     expect(login.status()).toBe(200);
     const crossTenant = await otherRequest.get(`${API}/api/v1/dashboard`, {
