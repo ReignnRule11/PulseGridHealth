@@ -55,7 +55,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   const adminEmail = "admin@pulsegrid-e2e.test";
   const reviewerEmail = "reviewer@pulsegrid-e2e.test";
   const viewerEmail = "viewer@pulsegrid-e2e.test";
-  const organizationId = await bootstrap(page.request, adminEmail, "PulseGrid E2E Authority");
+  const organizationId = await bootstrap(page.context().request, adminEmail, "PulseGrid E2E Authority");
 
   await signIn(page, adminEmail, ADMIN_PASSWORD);
   const csv = [
@@ -92,7 +92,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   const cookies = await page.context().cookies(API);
   const csrfCookie = cookies.find(cookie => cookie.name === "pulsegrid_csrf");
   expect(csrfCookie).toBeTruthy();
-  const deniedUpload = await page.request.post(`${API}/api/v1/observations/import`, {
+  const deniedUpload = await page.context().request.post(`${API}/api/v1/observations/import`, {
     headers: { "X-Organization-ID": organizationId, "X-CSRF-Token": csrfCookie!.value },
     multipart: { file: { name: "empty.csv", mimeType: "text/csv", buffer: Buffer.from("domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n") } }
   });
@@ -122,5 +122,5 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in securely" })).toBeVisible();
-  expect((await page.request.get(`${API}/api/v1/auth/me`)).status()).toBe(401);
+  expect((await page.context().request.get(`${API}/api/v1/auth/me`)).status()).toBe(401);
 });
