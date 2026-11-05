@@ -192,3 +192,12 @@ An issue is ready when:
 ## 8. GitHub execution source
 
 The linked E1–E8 issues are the work-tracking source of truth. Update this plan when dependencies, scope or acceptance gates change.
+
+- [E1 — Pilot deployment, security and operations](https://github.com/ReignnRule11/PulseGridHealth/issues/1)
+- [E2 — Import batches, CSV template and data quality workflow](https://github.com/ReignnRule11/PulseGridHealth/issues/2)
+- [E3 — Complete alert review with assignment and structured disposition](https://github.com/ReignnRule11/PulseGridHealth/issues/3)
+- [E4 — Organisation member administration, recovery and session revocation](https://github.com/ReignnRule11/PulseGridHealth/issues/4)
+- [E5 — Commercial foundation: plans, entitlements, subscriptions and billing](https://github.com/ReignnRule11/PulseGridHealth/issues/5)
+- [E6 — Tenant-safe aggregate reports, exports and notifications](https://github.com/ReignnRule11/PulseGridHealth/issues/6)
+- [E7 — First customer-backed data integration](https://github.com/ReignnRule11/PulseGridHealth/issues/7)
+- [E8 — Paid pilot and commercial validation](https://github.com/ReignnRule11/PulseGridHealth/issues/8)
