@@ -51,11 +51,13 @@ async function acceptInvite(page: Page, token: string, name: string, password: s
   await expect(page.getByText(/Invitation accepted/)).toBeVisible();
 }
 
-test("authenticated workspace enforces ingestion, review, role and tenant boundaries", async ({ page, browser }) => {
-  const adminEmail = "admin@pulsegrid-e2e.test";
-  const reviewerEmail = "reviewer@pulsegrid-e2e.test";
-  const viewerEmail = "viewer@pulsegrid-e2e.test";
-  const organizationId = await bootstrap(page.context().request, adminEmail, "PulseGrid E2E Authority");
+test("authenticated workspace enforces ingestion, review, role and tenant boundaries", async ({ page, browser }, testInfo) => {
+  // Retries share the same PostgreSQL service, so isolate each attempt from partial setup.
+  const suffix = `${process.env.GITHUB_RUN_ID ?? "local"}-${testInfo.workerIndex}-${testInfo.retry}`;
+  const adminEmail = `admin-${suffix}@pulsegrid-e2e.test`;
+  const reviewerEmail = `reviewer-${suffix}@pulsegrid-e2e.test`;
+  const viewerEmail = `viewer-${suffix}@pulsegrid-e2e.test`;
+  const organizationId = await bootstrap(page.context().request, adminEmail, `PulseGrid E2E Authority ${suffix}`);
 
   await signIn(page, adminEmail, ADMIN_PASSWORD);
   const csv = [
