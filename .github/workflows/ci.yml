@@ -57,3 +57,51 @@ jobs:
       - run: npm install
       - run: npx tsc --noEmit
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: pulsegrid
+          POSTGRES_PASSWORD: pulsegrid
+          POSTGRES_DB: pulsegrid_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pulsegrid -d pulsegrid_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://pulsegrid:pulsegrid@127.0.0.1:5432/pulsegrid_test
+      APP_ENV: test
+      BOOTSTRAP_TOKEN: pulsegrid-e2e-bootstrap-secret
+      CORS_ORIGINS: http://127.0.0.1:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install API dependencies
+        working-directory: apps/api
+        run: pip install -r requirements.txt
+      - name: Apply database migrations
+        working-directory: apps/api
+        run: alembic upgrade head
+      - name: Install frontend and Playwright dependencies
+        working-directory: apps/web
+        run: npm install
+      - name: Install Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Run browser end-to-end tests
+        working-directory: apps/web
+        env:
+          CI: "true"
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+        run: npm run test:e2e
