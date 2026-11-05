@@ -4,7 +4,7 @@ const apiEnv = {
   APP_ENV: "test",
   DATABASE_URL: process.env.DATABASE_URL ?? "postgresql+psycopg://pulsegrid:pulsegrid@127.0.0.1:5432/pulsegrid_test",
   CORS_ORIGINS: "http://127.0.0.1:3000",
-  BOOTSTRAP_TOKEN: "pulsegrid-e2e-bootstrap-secret",
+  BOOTSTRAP_TOKEN: "e2e-bootstrap-token-placeholder",
   SESSION_TTL_HOURS: "12",
   INVITATION_TTL_HOURS: "72",
   MAX_UPLOAD_MB: "5",
