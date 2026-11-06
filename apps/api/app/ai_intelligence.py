@@ -45,9 +45,7 @@ def _provider_generate(evidence: dict) -> dict:
         "model": settings.ai_model,
         "temperature": 0.1,
         "max_tokens": 1400,
-        "response_format": {"type": "json_schema", "json_schema": {
-            "name": "pulsegrid_alert_explanation", "strict": True, "schema": schema
-        }},
+        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": (
                 "You are PulseGrid's aggregate health-signal analyst. Explain only the supplied "
