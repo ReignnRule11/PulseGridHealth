@@ -43,6 +43,15 @@ class AlertExplanation(BaseModel):
 _NUMERIC_CLAIM = re.compile(r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)?%?(?![A-Za-z])")
 
 
+def _validate_evidence_references(result: AlertExplanation, allowed_ids: set[str]) -> None:
+    cited = set(result.evidence_ids)
+    for item in result.possible_interpretations:
+        cited.update(item.supporting_evidence_ids)
+        cited.update(item.contradicting_evidence_ids)
+    if not cited or not cited.issubset(allowed_ids):
+        raise HTTPException(status_code=502, detail="ai_evidence_validation_failed")
+
+
 def _reject_numeric_claims(result: AlertExplanation) -> None:
     """Numbers belong to deterministic evidence, never free-form model prose."""
     authored = [result.summary, *result.data_quality_caveats, *result.review_questions,
@@ -176,12 +185,11 @@ def explain_alert(alert_id: UUID, context: dict = Depends(get_request_tenant),
         raise HTTPException(status_code=502, detail="ai_provider_unavailable_or_invalid_response") from exc
     allowed_ids = {current["evidence_id"], detector["evidence_id"],
                    *[item["evidence_id"] for item in history]}
+    _validate_evidence_references(result, allowed_ids)
     cited = set(result.evidence_ids)
     for item in result.possible_interpretations:
         cited.update(item.supporting_evidence_ids)
         cited.update(item.contradicting_evidence_ids)
-    if not cited or not cited.issubset(allowed_ids):
-        raise HTTPException(status_code=502, detail="ai_evidence_validation_failed")
     _reject_numeric_claims(result)
 
     # Quantitative facts are constructed exclusively from persisted server-side evidence.
