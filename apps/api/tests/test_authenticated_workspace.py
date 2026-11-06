@@ -218,6 +218,10 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
         evidence_ids=["obs:known"]
     )
     ai_intelligence._reject_numeric_claims(qualitative)
+    ai_intelligence._validate_evidence_references(qualitative, {"obs:known"})
+    with pytest.raises(HTTPException) as foreign_error:
+        ai_intelligence._validate_evidence_references(qualitative, {"obs:another-tenant"})
+    assert foreign_error.value.status_code == 502
     numeric = qualitative.model_copy(update={"summary": "Reports increased by 40 percent."})
     with pytest.raises(HTTPException) as numeric_error:
         ai_intelligence._reject_numeric_claims(numeric)
