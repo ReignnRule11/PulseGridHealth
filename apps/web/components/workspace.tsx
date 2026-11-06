@@ -172,7 +172,7 @@ export default function Workspace() {
       const r=await apiFetch(`/api/v1/ai/alerts/${alert.id}/explanation`,{method:"POST"});
       const d=await r.json();
       if(!r.ok) throw new Error(d.detail ?? "AI explanation unavailable");
-      setAiInsights(v=>({...v,[alert.id]:d.explanation}));
+      setAiInsights(v=>({...v,[alert.id]:d}));
     } catch(e) { setMessage(e instanceof Error ? e.message : "AI explanation unavailable"); }
     finally { setAiBusy(""); }
   }
@@ -233,12 +233,17 @@ export default function Workspace() {
         <p>{a.indicator} · {a.observed_date} · {a.value} {a.unit}</p><p className="muted">{a.explanation}</p>
         <button className="button-secondary" disabled={aiBusy===a.id || busy || (!canReview && currentOrg?.role!=="analyst")} onClick={()=>generateAiExplanation(a)}>{aiBusy===a.id?"Analysing evidence…":"Generate AI evidence explanation"}</button>
         {aiInsights[a.id] && <div className="ai-insight">
-          <strong>AI evidence interpretation</strong><p>{aiInsights[a.id].summary}</p>
+          <strong>AI evidence interpretation</strong><p>{aiInsights[a.id].explanation.summary}</p>
           <p className="muted">Candidate signal only · Human review required</p>
-          {aiInsights[a.id].possible_interpretations?.map((item:any,i:number)=><div key={i}><strong>Hypothesis ({item.confidence_label})</strong><p>{item.hypothesis}</p><small>Evidence: {[...item.supporting_evidence_ids,...item.contradicting_evidence_ids].join(", ")}</small></div>)}
-          {aiInsights[a.id].data_quality_caveats?.length>0 && <div><strong>Data-quality caveats</strong><ul>{aiInsights[a.id].data_quality_caveats.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
-          {aiInsights[a.id].review_questions?.length>0 && <div><strong>Questions for reviewer</strong><ul>{aiInsights[a.id].review_questions.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
-          <small>Evidence references: {aiInsights[a.id].evidence_ids.join(", ")}</small>
+          <div><strong>Quantitative evidence · server-derived</strong>
+            <p>Current observation: {aiInsights[a.id].quantitative_evidence.current_observation.value} {aiInsights[a.id].quantitative_evidence.current_observation.unit} ({aiInsights[a.id].quantitative_evidence.current_observation.date})</p>
+            <p>Historical baseline: {aiInsights[a.id].quantitative_evidence.historical_baseline.value ?? "Not available"} {aiInsights[a.id].quantitative_evidence.historical_baseline.unit}</p>
+            <p>Robust score: {aiInsights[a.id].quantitative_evidence.detector.robust_score ?? "Not calculable"} · Threshold: {aiInsights[a.id].quantitative_evidence.detector.threshold} · Historical observations: {aiInsights[a.id].quantitative_evidence.detector.history_count}</p>
+          </div>
+          {aiInsights[a.id].explanation.possible_interpretations?.map((item:any,i:number)=><div key={i}><strong>Hypothesis ({item.confidence_label})</strong><p>{item.hypothesis}</p><small>Evidence: {[...item.supporting_evidence_ids,...item.contradicting_evidence_ids].join(", ")}</small></div>)}
+          {aiInsights[a.id].explanation.data_quality_caveats?.length>0 && <div><strong>Data-quality caveats</strong><ul>{aiInsights[a.id].explanation.data_quality_caveats.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+          {aiInsights[a.id].explanation.review_questions?.length>0 && <div><strong>Questions for reviewer</strong><ul>{aiInsights[a.id].explanation.review_questions.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+          <small>Evidence references: {aiInsights[a.id].explanation.evidence_ids.join(", ")}</small>
         </div>}
         {canReview && <div className="review-actions">
           {a.status==="pending_review" && <button disabled={busy} onClick={()=>review(a,"acknowledge")}>Acknowledge</button>}
