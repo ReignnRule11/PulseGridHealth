@@ -32,6 +32,8 @@ export default function Workspace() {
   const [rationales, setRationales] = useState<Record<string,string>>({});
   const [histories, setHistories] = useState<Record<string,string>>({});
   const [historyBusy, setHistoryBusy] = useState("");
+  const [aiInsights, setAiInsights] = useState<Record<string, any>>({});
+  const [aiBusy, setAiBusy] = useState("");
 
   const requestCsrf = useCallback(async () => {
     const r = await fetch(`${API}/api/v1/auth/csrf`, { credentials:"include", cache:"no-store" });
@@ -164,6 +166,17 @@ export default function Workspace() {
     finally { setBusy(false); }
   }
 
+  async function generateAiExplanation(alert:AlertItem) {
+    setAiBusy(alert.id); setMessage("");
+    try {
+      const r=await apiFetch(`/api/v1/ai/alerts/${alert.id}/explanation`,{method:"POST"});
+      const d=await r.json();
+      if(!r.ok) throw new Error(d.detail ?? "AI explanation unavailable");
+      setAiInsights(v=>({...v,[alert.id]:d.explanation}));
+    } catch(e) { setMessage(e instanceof Error ? e.message : "AI explanation unavailable"); }
+    finally { setAiBusy(""); }
+  }
+
   async function viewHistory(id:string) {
     setHistoryBusy(id);
     try { const r=await apiFetch(`/api/v1/alerts/${id}/history`); const d=await r.json();
@@ -218,6 +231,15 @@ export default function Workspace() {
       {alerts.length===0?<p className="muted">No candidate alerts in this organization.</p>:<div className="review-list">{alerts.map(a=><article className="review-card" key={a.id}>
         <div className="review-heading"><strong>{a.domain} / {a.group_code}</strong><span className="pending">{a.severity} · {a.status.replaceAll("_"," ")}</span></div>
         <p>{a.indicator} · {a.observed_date} · {a.value} {a.unit}</p><p className="muted">{a.explanation}</p>
+        <button className="button-secondary" disabled={aiBusy===a.id || busy || (!canReview && currentOrg?.role!=="analyst")} onClick={()=>generateAiExplanation(a)}>{aiBusy===a.id?"Analysing evidence…":"Generate AI evidence explanation"}</button>
+        {aiInsights[a.id] && <div className="ai-insight">
+          <strong>AI evidence interpretation</strong><p>{aiInsights[a.id].summary}</p>
+          <p className="muted">Candidate signal only · Human review required</p>
+          {aiInsights[a.id].possible_interpretations?.map((item:any,i:number)=><div key={i}><strong>Hypothesis ({item.confidence_label})</strong><p>{item.hypothesis}</p><small>Evidence: {[...item.supporting_evidence_ids,...item.contradicting_evidence_ids].join(", ")}</small></div>)}
+          {aiInsights[a.id].data_quality_caveats?.length>0 && <div><strong>Data-quality caveats</strong><ul>{aiInsights[a.id].data_quality_caveats.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+          {aiInsights[a.id].review_questions?.length>0 && <div><strong>Questions for reviewer</strong><ul>{aiInsights[a.id].review_questions.map((x:string,i:number)=><li key={i}>{x}</li>)}</ul></div>}
+          <small>Evidence references: {aiInsights[a.id].evidence_ids.join(", ")}</small>
+        </div>}
         {canReview && <div className="review-actions">
           {a.status==="pending_review" && <button disabled={busy} onClick={()=>review(a,"acknowledge")}>Acknowledge</button>}
           {a.status==="acknowledged" && <button disabled={busy} onClick={()=>review(a,"investigation")}>Start investigation</button>}
