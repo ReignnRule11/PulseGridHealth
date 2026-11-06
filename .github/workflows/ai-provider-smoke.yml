@@ -1,0 +1,37 @@
+name: AI live provider smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulsegrid-ai-provider-smoke
+  cancel-in-progress: false
+
+jobs:
+  provider-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      DATABASE_URL: postgresql+psycopg://pulsegrid:placeholder@127.0.0.1:5432/pulsegrid_smoke
+      APP_ENV: test
+      AI_ENABLED: "true"
+      AI_PROVIDER_NAME: openai_compatible
+      AI_API_BASE: ${{ vars.AI_API_BASE || 'https://api.openai.com/v1' }}
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
+      AI_MODEL: ${{ vars.AI_MODEL || 'gpt-4.1-mini' }}
+      AI_TIMEOUT_SECONDS: "30"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install API dependencies
+        run: pip install -r requirements.txt
+      - name: Verify live provider with synthetic evidence
+        run: python scripts/ai_provider_smoke.py
