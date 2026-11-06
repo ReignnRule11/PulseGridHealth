@@ -238,7 +238,7 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
     workforce_rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     workforce_rows += "".join(
         f"workforce,AI-WORKFORCE,AI-W-SOURCE,2026-09-{day:02d},heat_symptoms,{value},25,reports\n"
-        for day, value in [(1, 2), (2, 3), (3, 2), (4, 3), (5, 2), (6, 3), (7, 2), (8, 15)]
+        for day, value in [(1, 2), (2, 3), (3, 4), (4, 3), (5, 4), (6, 3), (7, 4), (8, 15)]
     )
     workforce_import = client.post("/api/v1/observations/import",
         headers={"X-Organization-ID": organization_id, "X-CSRF-Token": token},
