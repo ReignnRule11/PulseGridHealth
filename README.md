@@ -14,13 +14,14 @@ It is an **early-warning and review-support layer**. It is not an electronic med
 
 ## 1. Platform overview
 
-The current repository implements five connected capabilities:
+The current repository implements six connected capabilities:
 
 1. **Aggregate signal ingestion** — accepts structured CSV observations for community and workforce groups, validates the file and individual rows, and persists accepted records.
 2. **Historical anomaly screening** — compares each new observation with prior observations for the same organization, group, and indicator using a median/MAD robust-deviation method.
 3. **Evidence-backed candidate alerts** — stores the baseline, score (where calculable), history count, detector metadata, and an explanation for signals that cross the configured threshold.
 4. **Human review and investigation** — supports acknowledgement, investigation, findings, response actions, resolution, and review-history retrieval.
-5. **Organization workspace and access control** — provides sign-in, invitation-based onboarding, organization selection, role-aware workspace controls, and organization-scoped API/database access.
+5. **AI-assisted alert interpretation (disabled by default)** — includes a real server-side OpenAI-compatible provider adapter for qualitative explanations. Numerical findings remain server-derived from persisted evidence; model output is schema-checked and evidence-reference validated. A successful live provider call has not yet been verified.
+6. **Organization workspace and access control** — provides sign-in, invitation-based onboarding, organization selection, role-aware workspace controls, and organization-scoped API/database access.
 
 ### Supported observation domains
 
@@ -63,7 +64,7 @@ Invitation delivery is currently manual: the application returns a one-time toke
 
 The frontend dependencies and scripts are declared in apps/web/package.json. Backend dependencies and supported version ranges are declared in apps/api/requirements.txt.
 
-**No machine-learning model, LLM integration, real-time sensor connector, external epidemiological feed, or mobile-native application is implemented in the current repository.** The anomaly detector is a deterministic statistical service.
+**No trained machine-learning model, real-time sensor connector, external epidemiological feed, or mobile-native application is implemented. A real OpenAI-compatible LLM adapter is present for AI-1 alert explanations, but `AI_ENABLED=false` by default and no successful live provider call has been verified. The anomaly detector remains a deterministic statistical service; the LLM does not detect anomalies or make decisions.
 
 ## 4. Repository structure
 
@@ -122,6 +123,7 @@ PulseGridHealth/
 │       ├── package.json
 │       └── tsconfig.json
 ├── docs/
+│   ├── AI_ARCHITECTURE.md
 │   ├── ARCHITECTURE.md
 │   ├── DATABASE.md
 │   ├── DEPLOYMENT.md
@@ -139,6 +141,7 @@ PulseGridHealth/
 ### Main code areas
 
 - apps/api/app/main.py — FastAPI application, health/readiness endpoints, dashboard and alert reads, CSV import, and detection execution.
+- apps/api/app/ai_intelligence.py — server-side LLM provider adapter, tenant-scoped evidence assembly, workforce cohort suppression, strict qualitative output validation, and audit events.
 - apps/api/app/security.py — bootstrap, login, session handling, CSRF validation, invitations, membership checks, roles, and tenant context.
 - apps/api/app/review.py — alert review and investigation endpoints, response actions, and audit-history retrieval.
 - apps/api/app/models.py — SQLAlchemy persistence models and database constraints.
@@ -248,6 +251,7 @@ Authentication uses scrypt password hashes and opaque, database-backed session t
 | GET | /api/v1/alerts | Organization candidate-alert list |
 | POST | /api/v1/observations/import | Import aggregate CSV (file multipart field) |
 | POST | /api/v1/detection/run | Evaluate observations without stored detection results |
+| POST | /api/v1/ai/alerts/{alert_id}/explanation | Generate a qualitative AI explanation from tenant-scoped aggregate evidence (disabled unless configured) |
 | POST | /api/v1/alerts/{alert_id}/acknowledge | Acknowledge a candidate alert |
 | POST | /api/v1/alerts/{alert_id}/investigation | Start an investigation |
 | POST | /api/v1/alerts/{alert_id}/findings | Record investigation findings |
@@ -397,7 +401,7 @@ The current repository does not implement:
 - Native Android or iOS applications.
 - Live sensor, wearable, laboratory, hospital, or government data integrations.
 - Automated scheduled ingestion or streaming pipelines.
-- Machine-learning training, LLM-based interpretation, or a conversational assistant.
+- Machine-learning training or a conversational aggregate-health copilot. AI-1 qualitative alert explanation is implemented behind a disabled-by-default feature flag; successful live provider verification and production governance remain outstanding.
 - Clinical diagnosis, individual risk scoring, outbreak declaration, or automated response decisions.
 - Automated email/SMS invitation delivery.
 - Full account recovery or account/session administration workflows.
