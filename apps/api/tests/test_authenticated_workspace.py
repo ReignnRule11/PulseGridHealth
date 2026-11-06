@@ -226,6 +226,9 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
     with pytest.raises(HTTPException) as numeric_error:
         ai_intelligence._reject_numeric_claims(numeric)
     assert numeric_error.value.status_code == 502
+    ratio_claim = qualitative.model_copy(update={"summary": "Reports doubled during the latest period."})
+    with pytest.raises(HTTPException):
+        ai_intelligence._reject_numeric_claims(ratio_claim)
     with pytest.raises(Exception):
         ai_intelligence.AlertExplanation.model_validate({
             **qualitative.model_dump(), "untrusted_extra_field": "must be rejected"
