@@ -149,3 +149,58 @@ def test_role_scoped_workspace_reads_ingestion_review_and_csrf(client):
     assert client.get("/api/v1/dashboard", headers={
         "X-Organization-ID": "00000000-0000-0000-0000-000000000099"
     }).status_code == 403
+
+
+
+def test_ai_alert_explanation_is_guarded_and_evidence_validated(client, monkeypatch):
+    from app import ai_intelligence
+    organization_id = bootstrap(client)
+    _, token = login(client, "admin@workspace.test", "Admin-Password-2026!")
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    rows += "".join(
+        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\\n"
+        for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
+    )
+    imported = client.post("/api/v1/observations/import",
+        headers={"X-Organization-ID": organization_id, "X-CSRF-Token": token},
+        files={"file": ("ai.csv", io.BytesIO(rows.encode()), "text/csv")})
+    assert imported.status_code == 200, imported.text
+    alert = client.get("/api/v1/alerts?status=all",
+        headers={"X-Organization-ID": organization_id}).json()["items"][0]
+
+    url = f"/api/v1/ai/alerts/{alert['id']}/explanation"
+    headers = {"X-Organization-ID": organization_id, "X-CSRF-Token": token}
+    disabled = client.post(url, headers=headers)
+    assert disabled.status_code == 503
+    monkeypatch.setattr(ai_intelligence.settings, "ai_enabled", True)
+    monkeypatch.setattr(ai_intelligence.settings, "ai_api_key", "synthetic-test-key")
+
+    def valid_response(evidence):
+        current_id = evidence["current"]["evidence_id"]
+        detector_id = evidence["detector"]["evidence_id"]
+        return {
+            "summary": "A candidate aggregate signal differs from its historical baseline.",
+            "observed_changes": [{"metric": evidence["indicator"], "evidence_id": current_id}],
+            "possible_interpretations": [{
+                "hypothesis": "A change in reporting patterns may explain this signal.",
+                "supporting_evidence_ids": [current_id, detector_id],
+                "contradicting_evidence_ids": [], "confidence_label": "low"
+            }],
+            "data_quality_caveats": ["Reporting completeness has not been independently verified."],
+            "review_questions": ["Was the reporting process consistent during this period?"],
+            "recommended_review_steps": ["Verify the source aggregate and reporting window."],
+            "limitations": ["Synthetic test data; no epidemiological validation."],
+            "requires_human_review": True, "classification": "candidate_signal",
+            "evidence_ids": [current_id, detector_id],
+        }
+    monkeypatch.setattr(ai_intelligence, "_provider_generate", valid_response)
+    response = client.post(url, headers=headers)
+    assert response.status_code == 200, response.text
+    assert response.json()["explanation"]["requires_human_review"] is True
+
+    monkeypatch.setattr(ai_intelligence, "_provider_generate", lambda evidence: {
+        **valid_response(evidence), "evidence_ids": ["obs:foreign-tenant-record"]
+    })
+    rejected = client.post(url, headers=headers)
+    assert rejected.status_code == 502
+    assert rejected.json()["detail"] == "ai_evidence_validation_failed"
