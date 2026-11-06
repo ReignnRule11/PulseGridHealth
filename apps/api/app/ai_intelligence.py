@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import urllib.error
 import urllib.request
@@ -16,6 +17,7 @@ from app.models import Alert, DetectionResult, HealthObservation, Community, Wor
 from app.security import get_request_tenant, enforce_roles, require_tenant_csrf
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI health intelligence"])
+logger = logging.getLogger(__name__)
 
 
 class Interpretation(BaseModel):
@@ -125,8 +127,29 @@ def _provider_generate(evidence: dict) -> dict:
         if not isinstance(result, dict):
             raise ValueError("provider_content_not_object")
         return result
+    except urllib.error.HTTPError as exc:
+        # Record only bounded, non-secret provider diagnostics. Never log the response body,
+        # request payload, authorization header, or API key.
+        try:
+            error_body = json.loads(exc.read(8192))
+            provider_error = error_body.get("error", {}) if isinstance(error_body, dict) else {}
+            if not isinstance(provider_error, dict):
+                provider_error = {}
+        except (ValueError, TypeError, OSError):
+            provider_error = {}
+        error_type = provider_error.get("type")
+        error_code = provider_error.get("code")
+        logger.warning(
+            "AI provider rejected request status=%s error_type=%s error_code=%s request_id=%s",
+            exc.code,
+            str(error_type)[:128] if error_type is not None else "unknown",
+            str(error_code)[:128] if error_code is not None else "unknown",
+            str(exc.headers.get("x-request-id", "unknown"))[:128],
+        )
+        raise HTTPException(status_code=502, detail="ai_provider_unavailable_or_invalid_response") from exc
     except (urllib.error.URLError, TimeoutError, OSError, KeyError, IndexError,
             ValueError, TypeError) as exc:
+        logger.warning("AI provider request failed: %s", type(exc).__name__)
         raise HTTPException(status_code=502, detail="ai_provider_unavailable_or_invalid_response") from exc
 
 
