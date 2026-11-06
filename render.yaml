@@ -15,7 +15,7 @@ services:
     # Move migrations to preDeployCommand before using a paid/multi-instance setup.
     startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    autoDeployTrigger: off
+    autoDeployTrigger: 'off'
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -51,7 +51,7 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
     healthCheckPath: /
-    autoDeployTrigger: off
+    autoDeployTrigger: 'off'
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://pulsegrid-api.onrender.com
