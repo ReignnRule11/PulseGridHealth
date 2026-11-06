@@ -88,7 +88,7 @@ Required controls:
 - provider outage handling;
 - redacted operational telemetry.
 
-Do not select a provider solely on benchmark claims. Compare quality, structured-output reliability, data-processing terms, regional availability, latency, and total cost using synthetic/approved aggregate fixtures. No model-provider integration is active merely because this architecture is documented.
+Do not select a provider solely on benchmark claims. Compare quality, structured-output reliability, data-processing terms, regional availability, latency, and total cost using synthetic/approved aggregate fixtures. The AI-1 adapter is implemented, but the feature remains disabled until live provider verification and the release gates below are complete.
 
 ## 6. Security, privacy, and governance
 
