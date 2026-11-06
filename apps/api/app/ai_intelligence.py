@@ -200,7 +200,7 @@ def explain_alert(alert_id: UUID, context: dict = Depends(get_request_tenant),
         "detector": {"robust_score": detection.anomaly_score, "threshold": detection.threshold,
                      "history_count": detection.history_count, "reason": detection.reason},
         "history": history,
-        "workforce_cohort_size": cohort_size,
+        "workforce_cohort_eligible": cohort_size is not None,
     }
     db.add(AuditLog(organization_id=org_id, alert_id=alert.id, actor=context["actor"],
         event_type="ai.alert_explanation_generated",
