@@ -3,6 +3,15 @@
 Run with AI_ENABLED=true and AI_API_KEY set in the environment. This script
 never reads production records and never prints credentials or model output.
 """
+import sys
+from pathlib import Path
+
+# Make the API package importable when this script is invoked by file path
+# from the apps/api working directory in GitHub Actions.
+API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
 from app.ai_intelligence import (
     AlertExplanation,
     _provider_generate,
