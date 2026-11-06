@@ -28,6 +28,7 @@ def client(monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
+        test_client.state.testing_session = testing_session
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
@@ -152,13 +153,17 @@ def test_role_scoped_workspace_reads_ingestion_review_and_csrf(client):
 
 
 
-def test_ai_alert_explanation_is_guarded_and_evidence_validated(client, monkeypatch):
+def test_ai_alert_explanation_security_grounding_and_provider_failures(client, monkeypatch):
+    import urllib.error
+    from fastapi import HTTPException
     from app import ai_intelligence
+    from app.models import WorkforceGroup
+
     organization_id = bootstrap(client)
     _, token = login(client, "admin@workspace.test", "Admin-Password-2026!")
-    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
     rows += "".join(
-        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\n"
+        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\\n"
         for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
     )
     imported = client.post("/api/v1/observations/import",
@@ -167,40 +172,85 @@ def test_ai_alert_explanation_is_guarded_and_evidence_validated(client, monkeypa
     assert imported.status_code == 200, imported.text
     alert = client.get("/api/v1/alerts?status=all",
         headers={"X-Organization-ID": organization_id}).json()["items"][0]
-
     url = f"/api/v1/ai/alerts/{alert['id']}/explanation"
     headers = {"X-Organization-ID": organization_id, "X-CSRF-Token": token}
-    disabled = client.post(url, headers=headers)
-    assert disabled.status_code == 503
+    assert client.post(url, headers=headers).status_code == 503
+
     monkeypatch.setattr(ai_intelligence.settings, "ai_enabled", True)
     monkeypatch.setattr(ai_intelligence.settings, "ai_api_key", "synthetic-test-key")
 
-    def valid_response(evidence):
-        current_id = evidence["current"]["evidence_id"]
-        detector_id = evidence["detector"]["evidence_id"]
-        return {
-            "summary": "A candidate aggregate signal differs from its historical baseline.",
-            "observed_changes": [{"metric": evidence["indicator"], "evidence_id": current_id}],
-            "possible_interpretations": [{
-                "hypothesis": "A change in reporting patterns may explain this signal.",
-                "supporting_evidence_ids": [current_id, detector_id],
-                "contradicting_evidence_ids": [], "confidence_label": "low"
-            }],
-            "data_quality_caveats": ["Reporting completeness has not been independently verified."],
-            "review_questions": ["Was the reporting process consistent during this period?"],
-            "recommended_review_steps": ["Verify the source aggregate and reporting window."],
-            "limitations": ["Synthetic test data; no epidemiological validation."],
-            "requires_human_review": True, "classification": "candidate_signal",
-            "evidence_ids": [current_id, detector_id],
-        }
-    monkeypatch.setattr(ai_intelligence, "_provider_generate", valid_response)
-    response = client.post(url, headers=headers)
-    assert response.status_code == 200, response.text
-    assert response.json()["explanation"]["requires_human_review"] is True
+    # A different tenant cannot reach the model gateway, even with a valid session.
+    def must_not_call_provider(*args, **kwargs):
+        raise AssertionError("provider must not be called for a cross-tenant request")
+    monkeypatch.setattr(ai_intelligence.urllib.request, "urlopen", must_not_call_provider)
+    cross_tenant = client.post(url, headers={**headers,
+        "X-Organization-ID": "00000000-0000-0000-0000-000000000099"})
+    assert cross_tenant.status_code == 403
 
-    monkeypatch.setattr(ai_intelligence, "_provider_generate", lambda evidence: {
-        **valid_response(evidence), "evidence_ids": ["obs:foreign-tenant-record"]
-    })
-    rejected = client.post(url, headers=headers)
-    assert rejected.status_code == 502
-    assert rejected.json()["detail"] == "ai_evidence_validation_failed"
+    # Provider transport failures fail closed and do not leak upstream details.
+    def provider_timeout(*args, **kwargs):
+        raise urllib.error.URLError("synthetic upstream outage")
+    monkeypatch.setattr(ai_intelligence.urllib.request, "urlopen", provider_timeout)
+    unavailable = client.post(url, headers=headers)
+    assert unavailable.status_code == 502
+    assert unavailable.json()["detail"] == "ai_provider_unavailable_or_invalid_response"
+
+    # A syntactically malformed provider response is also rejected.
+    class BadResponse:
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, size=-1): return b'{"choices":[{"message":{"content":"not-json"}}]}'
+    monkeypatch.setattr(ai_intelligence.urllib.request, "urlopen", lambda *a, **k: BadResponse())
+    malformed = client.post(url, headers=headers)
+    assert malformed.status_code == 502
+    assert malformed.json()["detail"] == "ai_provider_unavailable_or_invalid_response"
+
+    # Model-authored prose cannot introduce quantitative facts.
+    qualitative = ai_intelligence.AlertExplanation(
+        summary="A candidate aggregate signal differs from the established pattern.",
+        possible_interpretations=[{
+            "hypothesis": "A reporting-process change may explain the observed signal.",
+            "supporting_evidence_ids": ["obs:known"], "contradicting_evidence_ids": [],
+            "confidence_label": "low"
+        }],
+        requires_human_review=True, classification="candidate_signal",
+        evidence_ids=["obs:known"]
+    )
+    ai_intelligence._reject_numeric_claims(qualitative)
+    numeric = qualitative.model_copy(update={"summary": "Reports increased by 40 percent."})
+    with pytest.raises(HTTPException) as numeric_error:
+        ai_intelligence._reject_numeric_claims(numeric)
+    assert numeric_error.value.status_code == 502
+    with pytest.raises(Exception):
+        ai_intelligence.AlertExplanation.model_validate({
+            **qualitative.model_dump(), "untrusted_extra_field": "must be rejected"
+        })
+
+    # Workforce evidence is suppressed when the cohort is below threshold or unknown.
+    workforce_rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    workforce_rows += "".join(
+        f"workforce,AI-WORKFORCE,AI-W-SOURCE,2026-09-{day:02d},heat_symptoms,{value},25,reports\\n"
+        for day, value in [(1, 2), (2, 3), (3, 2), (4, 3), (5, 2), (6, 3), (7, 2), (8, 15)]
+    )
+    workforce_import = client.post("/api/v1/observations/import",
+        headers={"X-Organization-ID": organization_id, "X-CSRF-Token": token},
+        files={"file": ("workforce.csv", io.BytesIO(workforce_rows.encode()), "text/csv")})
+    assert workforce_import.status_code == 200, workforce_import.text
+    db = client.state.testing_session()
+    try:
+        group = db.query(WorkforceGroup).filter_by(
+            organization_id=organization_id, location_code="AI-WORKFORCE").one()
+        workforce_alert = client.get("/api/v1/alerts?status=all",
+            headers={"X-Organization-ID": organization_id}).json()["items"]
+        workforce_alert = next(item for item in workforce_alert if item["domain"] == "workforce")
+        workforce_url = f"/api/v1/ai/alerts/{workforce_alert['id']}/explanation"
+        group.cohort_size = 19
+        db.commit()
+        suppressed = client.post(workforce_url, headers=headers)
+        assert suppressed.status_code == 404
+        group.cohort_size = None
+        db.commit()
+        unknown = client.post(workforce_url, headers=headers)
+        assert unknown.status_code == 404
+    finally:
+        db.close()
