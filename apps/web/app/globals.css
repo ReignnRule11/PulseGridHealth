@@ -68,3 +68,8 @@ th { color:#718096; font-weight:700; }
  .invite-form { grid-template-columns:1fr; }
  .upload button { width:100%; }
 }
+
+.ai-insight { margin:12px 0; padding:15px; border:1px solid #cbdedb; border-radius:10px; background:#f5faf9; display:grid; gap:9px; }
+.ai-insight p { margin:3px 0; }
+.ai-insight small { color:#68788c; overflow-wrap:anywhere; }
+.ai-insight ul { margin:4px 0; padding-left:20px; }
