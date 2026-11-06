@@ -156,9 +156,9 @@ def test_ai_alert_explanation_is_guarded_and_evidence_validated(client, monkeypa
     from app import ai_intelligence
     organization_id = bootstrap(client)
     _, token = login(client, "admin@workspace.test", "Admin-Password-2026!")
-    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     rows += "".join(
-        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\\n"
+        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\n"
         for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
     )
     imported = client.post("/api/v1/observations/import",
