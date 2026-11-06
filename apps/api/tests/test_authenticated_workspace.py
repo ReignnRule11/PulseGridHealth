@@ -28,7 +28,7 @@ def client(monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
-        test_client.state.testing_session = testing_session
+        test_client.testing_session = testing_session
         yield test_client
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
@@ -241,7 +241,7 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
         headers={"X-Organization-ID": organization_id, "X-CSRF-Token": token},
         files={"file": ("workforce.csv", io.BytesIO(workforce_rows.encode()), "text/csv")})
     assert workforce_import.status_code == 200, workforce_import.text
-    db = client.state.testing_session()
+    db = client.testing_session()
     try:
         group = db.query(WorkforceGroup).filter_by(
             organization_id=UUID(organization_id), location_code="AI-WORKFORCE").one()
