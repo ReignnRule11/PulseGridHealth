@@ -12,5 +12,11 @@ class Settings(BaseSettings):
     bootstrap_token: str = ""
     session_ttl_hours: int = 12
     invitation_ttl_hours: int = 72
+    ai_enabled: bool = False
+    ai_provider_name: str = "openai_compatible"
+    ai_api_base: str = "https://api.openai.com/v1"
+    ai_api_key: str = ""
+    ai_model: str = "gpt-4.1-mini"
+    ai_timeout_seconds: int = 20
 
 settings = Settings()
