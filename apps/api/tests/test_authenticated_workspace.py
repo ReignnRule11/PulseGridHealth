@@ -155,15 +155,16 @@ def test_role_scoped_workspace_reads_ingestion_review_and_csrf(client):
 
 def test_ai_alert_explanation_security_grounding_and_provider_failures(client, monkeypatch):
     import urllib.error
+    from uuid import UUID
     from fastapi import HTTPException
     from app import ai_intelligence
     from app.models import WorkforceGroup
 
     organization_id = bootstrap(client)
     _, token = login(client, "admin@workspace.test", "Admin-Password-2026!")
-    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     rows += "".join(
-        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\\n"
+        f"community,AI-GROUP,AI-SOURCE,2026-08-{day:02d},weekly_reports,{value},5000,reports\n"
         for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
     )
     imported = client.post("/api/v1/observations/import",
@@ -227,9 +228,9 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
         })
 
     # Workforce evidence is suppressed when the cohort is below threshold or unknown.
-    workforce_rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    workforce_rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     workforce_rows += "".join(
-        f"workforce,AI-WORKFORCE,AI-W-SOURCE,2026-09-{day:02d},heat_symptoms,{value},25,reports\\n"
+        f"workforce,AI-WORKFORCE,AI-W-SOURCE,2026-09-{day:02d},heat_symptoms,{value},25,reports\n"
         for day, value in [(1, 2), (2, 3), (3, 2), (4, 3), (5, 2), (6, 3), (7, 2), (8, 15)]
     )
     workforce_import = client.post("/api/v1/observations/import",
@@ -239,7 +240,7 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
     db = client.state.testing_session()
     try:
         group = db.query(WorkforceGroup).filter_by(
-            organization_id=organization_id, location_code="AI-WORKFORCE").one()
+            organization_id=UUID(organization_id), location_code="AI-WORKFORCE").one()
         workforce_alert = client.get("/api/v1/alerts?status=all",
             headers={"X-Organization-ID": organization_id}).json()["items"]
         workforce_alert = next(item for item in workforce_alert if item["domain"] == "workforce")
