@@ -40,7 +40,14 @@ class AlertExplanation(BaseModel):
     evidence_ids: list[str] = Field(min_length=1, max_length=30)
 
 
-_NUMERIC_CLAIM = re.compile(r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)?%?(?![A-Za-z])")
+_NUMERIC_CLAIM = re.compile(
+    r"(?<![A-Za-z])[-+]?\d+(?:[.,]\d+)?%?(?![A-Za-z])|"
+    r"\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|"
+    r"eighteen|nineteen|twenty|thirty|forty|fifty|hundred|thousand|"
+    r"twice|double|doubled|triple|tripled|half|halved|percent|percentage)\b",
+    re.IGNORECASE,
+)
 
 
 def _validate_evidence_references(result: AlertExplanation, allowed_ids: set[str]) -> None:
