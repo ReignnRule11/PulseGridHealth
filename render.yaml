@@ -1,0 +1,65 @@
+# PulseGrid Health — temporary synthetic-data staging on Render.
+# All services are deliberately on the free tier. Free Postgres expires after
+# 30 days and has no backups; this is NOT a production or pilot-data environment.
+# Keep AI disabled. Do not upload patient or employee records.
+services:
+  - type: web
+    name: pulsegrid-api
+    runtime: python
+    plan: free
+    region: frankfurt
+    rootDir: apps/api
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    # Free web services do not support preDeployCommand. This single-instance
+    # staging configuration runs idempotent Alembic migrations at startup.
+    # Move migrations to preDeployCommand before using a paid/multi-instance setup.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pulsegrid-staging-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: https://pulsegrid-web.onrender.com
+      - key: BOOTSTRAP_TOKEN
+        generateValue: true
+      - key: SESSION_TTL_HOURS
+        value: "12"
+      - key: INVITATION_TTL_HOURS
+        value: "72"
+      - key: MAX_UPLOAD_MB
+        value: "5"
+      - key: MIN_BASELINE_POINTS
+        value: "6"
+      - key: ANOMALY_Z_THRESHOLD
+        value: "3.5"
+      - key: MIN_WORKFORCE_COHORT_SIZE
+        value: "20"
+      - key: AI_ENABLED
+        value: "false"
+
+  - type: web
+    name: pulsegrid-web
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: apps/web
+    buildCommand: npm install && npm run build
+    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    autoDeployTrigger: off
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://pulsegrid-api.onrender.com
+
+databases:
+  - name: pulsegrid-staging-db
+    databaseName: pulsegrid_staging
+    user: pulsegrid_app
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
