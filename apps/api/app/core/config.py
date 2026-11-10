@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file="../../.env", extra="ignore")
 
     database_url: str
+    migration_database_url: str | None = None
     app_env: str = "development"
     cors_origins: str = "http://localhost:3000"
     max_upload_mb: int = 5
@@ -22,10 +23,10 @@ class Settings(BaseSettings):
     ai_model: str = "gpt-4.1-mini"
     ai_timeout_seconds: int = 20
 
-    @field_validator("database_url", mode="before")
+    @field_validator("database_url", "migration_database_url", mode="before")
     @classmethod
-    def normalize_postgres_driver(cls, value: str) -> str:
-        """Render supplies postgresql:// URLs; this app installs psycopg v3."""
+    def normalize_postgres_driver(cls, value: str | None) -> str | None:
+        """Normalize provider PostgreSQL URLs for the installed Psycopg 3 driver."""
         if not isinstance(value, str):
             return value
         if value.startswith("postgres://"):
