@@ -91,14 +91,28 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(viewerAlert).toBeVisible();
   await expect(viewerAlert.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
 
-  const cookies = await page.context().cookies(API);
+  const cookies = await page.context().cookies("http://127.0.0.1:3000");
   const csrfCookie = cookies.find(cookie => cookie.name === "pulsegrid_csrf");
   expect(csrfCookie).toBeTruthy();
-  const deniedUpload = await page.context().request.post(`${API}/api/v1/observations/import`, {
-    headers: { "X-Organization-ID": organizationId, "X-CSRF-Token": csrfCookie!.value },
-    multipart: { file: { name: "empty.csv", mimeType: "text/csv", buffer: Buffer.from("domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n") } }
-  });
-  expect(deniedUpload.status()).toBe(403);
+  const deniedUploadStatus = await page.evaluate(async ({ orgId, csrfToken }) => {
+    const body = new FormData();
+    body.append(
+      "file",
+      new Blob(["domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"], { type: "text/csv" }),
+      "empty.csv"
+    );
+    const response = await fetch("/api/v1/observations/import", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "X-Organization-ID": orgId,
+        "X-CSRF-Token": csrfToken
+      },
+      body
+    });
+    return response.status;
+  }, { orgId: organizationId, csrfToken: csrfCookie!.value });
+  expect(deniedUploadStatus).toBe(403);
 
   const otherContext = await browser.newContext();
   try {
@@ -124,5 +138,5 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in securely" })).toBeVisible();
-  expect((await page.context().request.get(`${API}/api/v1/auth/me`)).status()).toBe(401);
+  expect(await page.evaluate(async () => (await fetch("/api/v1/auth/me", { credentials: "include", cache: "no-store" })).status)).toBe(401);
 });

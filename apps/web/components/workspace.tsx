@@ -3,7 +3,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "";
 
 type Org = {
   id: string;

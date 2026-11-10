@@ -439,11 +439,13 @@ In a second terminal:
 cd apps/web
 ```
 
-Create `.env.local` with the API base URL:
+Create `.env.local` with the server-side API rewrite target:
 
 ```dotenv
-NEXT_PUBLIC_API_URL=http://localhost:8000
+API_BACKEND_ORIGIN=http://127.0.0.1:8000
 ```
+
+The browser uses relative `/api/...` paths on the Next.js origin. Next.js forwards those requests to FastAPI, so session and CSRF cookies remain first-party. Do not set `NEXT_PUBLIC_API_URL` for the normal local or hosted proxy workflow.
 
 Install dependencies and start Next.js:
 
@@ -452,7 +454,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Next.js (normally `http://localhost:3000`). The API URL must be reachable from the browser. For hosted deployments, use a topology compatible with the application's SameSite=Strict session cookies and exact CORS allowlist.
+Open the local URL printed by Next.js (normally `http://localhost:3000`). The API origin is reached server-to-server by the Next.js rewrite; the browser does not call FastAPI directly. For hosted deployments, use the Vercel same-origin rewrite and an exact CORS allowlist.
 
 ### 3. Bootstrap the first administrator
 
@@ -529,7 +531,8 @@ The API settings are defined in `apps/api/app/core/config.py`. The main variable
 
 | Variable | Purpose | Default in application |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL SQLAlchemy connection URL | Required |
+| `DATABASE_URL` | Neon PostgreSQL runtime SQLAlchemy connection URL | Required |
+| `MIGRATION_DATABASE_URL` | Separate direct PostgreSQL URL used by Alembic migrations | Required in production; local/test only may fall back to `DATABASE_URL` |
 | `APP_ENV` | Runtime environment; controls production cookie security behavior | `development` |
 | `CORS_ORIGINS` | Comma-separated exact allowed browser origins | `http://localhost:3000` |
 | `MAX_UPLOAD_MB` | Maximum CSV upload size in MiB | `5` |
@@ -550,24 +553,27 @@ The Render Blueprint supplies staging-specific values for several of these setti
 
 ## Deployment notes
 
-### Render staging Blueprint
+### Staging topology: Vercel + Render + Neon
 
-The root `render.yaml` defines a temporary staging topology with:
-- A Python API web service (`pulsegrid-api`).
-- A Node web service (`pulsegrid-web`).
-- A PostgreSQL 16 database (`pulsegrid-staging-db`).
-- Frankfurt region and free-tier plans.
-- AI explicitly disabled.
-- Automatic deployment disabled.
+The intended staging topology uses provider default HTTPS domains; a custom domain is not required:
 
-The API start command runs `alembic upgrade head` before Uvicorn. The repository documents this as a staging-only compromise for the free service configuration. For a paid or multi-instance deployment, migrations should be moved to a controlled release/pre-deploy step and separated from the runtime database role.
+- **Frontend:** Next.js on Vercel at `https://your-project.vercel.app`.
+- **Backend:** FastAPI on Render at `https://your-api.onrender.com`.
+- **Database:** Neon PostgreSQL.
 
-The frontend build embeds `NEXT_PUBLIC_API_URL`; changing the API hostname requires a frontend rebuild. The API's `/health` endpoint is a liveness check; `/ready` additionally checks database connectivity.
+The browser sends authenticated requests to the Vercel origin at `/api/*`. A Next.js rewrite forwards them to the Render API using the server-side `API_BACKEND_ORIGIN` variable. This keeps session and CSRF cookies on the Vercel origin with `SameSite=Strict`. Keep `NEXT_PUBLIC_API_URL` unset in production; never make the browser call the Render hostname directly for authenticated requests.
 
-> [!WARNING]
-> Render's free PostgreSQL instance is temporary (30-day expiry), limited in storage and does not include managed backups. Free web services can spin down when idle. This environment is for synthetic demonstrations only, not production, durable pilot use or sensitive health data. Check current provider limits before relying on the environment.
+Configure:
+- **Vercel:** `API_BACKEND_ORIGIN=https://your-api.onrender.com` (server-side; no `NEXT_PUBLIC_` prefix).
+- **Render:** `CORS_ORIGINS=https://your-project.vercel.app`, `DATABASE_URL` for the restricted Neon runtime role, and `MIGRATION_DATABASE_URL` for the separate Neon migration owner.
+- **Neon:** TLS-enabled pooled runtime connection and direct migration connection; runtime role must not own tenant tables or have administrative/BYPASSRLS privileges.
+- Keep AI disabled and use synthetic aggregate data only.
 
-**Staging verification is not complete.** The frontend hostname was reachable during a browser check, but the configured public API hostname returned routes belonging to a different application rather than this repository's FastAPI routes. The Render service dashboard still needs authenticated inspection to confirm the actual service hostname, deployed commit and service configuration. Do not use that API hostname for PulseGrid Health until the mapping is corrected and `/health`, `/ready` and the complete synthetic browser workflow have been verified against the correct API.
+The primary topology uses Vercel for the frontend, Render for FastAPI, and Neon for PostgreSQL. The Render Blueprint also retains the pre-existing `pulsegrid-web` and `pulsegrid-staging-db` resources as legacy fallbacks so a Blueprint sync does not remove them; they are not connected to the new API. Do not delete or repurpose those resources without an explicit backup and migration plan. Review `docs/RENDER_STAGING.md` and `docs/NEON_SETUP.md` before provisioning. This PR does not create a Vercel project, Neon database, or secret, and it does not authorize a Blueprint sync or deployment.
+
+Render's free web service may spin down and cold-start slowly. Review current Render and Neon plan limits, compute behavior, pricing, backup/restore retention and connection limits in the provider consoles before applying. This is synthetic staging, not a durable production or sensitive-data environment.
+
+**Staging verification is not complete.** Successful CI and a merged PR do not prove hosted connectivity. After the user explicitly approves provisioning, verify the deployed commit, API `/health` and `/ready`, runtime-role check, Vercel rewrite, cookie attributes and the complete synthetic browser workflow. Do not load patient, employee or other sensitive health data.
 
 ### Production deployment is not a supported claim
 

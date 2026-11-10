@@ -1,57 +1,56 @@
-# Render staging deployment (GitHub Blueprint)
+# Render API staging deployment with Neon
 
-This guide prepares a temporary, synthetic-data-only staging deployment from this repository. It does not authorize a production deployment or real health data.
+This guide prepares a temporary, synthetic-data-only FastAPI staging deployment on Render using Neon PostgreSQL. It does not authorize a production deployment or real health data. The Blueprint configures the API and deliberately retains the existing `pulsegrid-web` and `pulsegrid-staging-db` resources as legacy fallbacks. Those legacy resources are not connected to the new API; do not remove them during a Blueprint sync.
 
-## What the Blueprint creates
+## What the Blueprint configures
 
-- `pulsegrid-web`: Next.js web service.
-- `pulsegrid-api`: FastAPI service.
-- `pulsegrid-staging-db`: PostgreSQL 16 database.
-- Frankfurt region for all three resources.
-- HTTPS endpoints managed by Render.
-- API CORS restricted to the expected frontend origin.
+- `pulsegrid-api`: FastAPI web service on Render.
+- `pulsegrid-web` and `pulsegrid-staging-db`: retained legacy resources, not used by the new Vercel + Neon topology.
+- Frankfurt Render region; choose a Neon region close to Frankfurt to reduce database latency.
+- Render-managed HTTPS endpoint; optionally attach your custom API subdomain after the service is deployed.
+- `DATABASE_URL` and `MIGRATION_DATABASE_URL` as manually supplied protected environment variables.
+- Exact `CORS_ORIGINS` set to the Vercel default HTTPS origin after the frontend project URL is known.
 - A generated bootstrap token stored as a Render secret.
 - AI remains disabled.
+- Automatic deploys are off; deployment is a deliberate manual action.
 
-The web and API services use separate `onrender.com` subdomains. They are HTTPS subdomains under the same registrable domain, so the application's `SameSite=Strict` cookies remain same-site; the API CORS allowlist is restricted to the exact web origin. Do not add wildcard origins.
+## Neon connection design
 
-## Important free-tier limits
+Use two Neon connection strings for the same database:
 
-This Blueprint deliberately selects free plans to avoid creating billable resources without approval. Render documents that free web services spin down after 15 minutes idle and can take about a minute to wake. Free Postgres is limited to 1 GB, expires 30 days after creation, and has no backups. Therefore:
-- Use only synthetic demonstration data.
-- Do not treat this environment as production, a durable pilot, or a place for patient/employee data.
-- Export no sensitive information; the free database has no managed backup.
-- Monitor the database expiry date and delete the environment when finished, or explicitly approve an upgrade after reviewing the price.
+- `DATABASE_URL`: runtime role, preferably Neon pooled endpoint, least-privilege role, TLS required.
+- `MIGRATION_DATABASE_URL`: direct/non-pooler endpoint, migration-owner role, TLS required.
 
-See Render's current [free-tier limitations](https://render.com/docs/free) and [Blueprint reference](https://render.com/docs/blueprint-spec).
+Do not use the Neon owner connection as the API runtime identity. Follow [NEON_SETUP.md](NEON_SETUP.md) to create the restricted role and grant only application table/sequence access. The startup command applies migrations with the migration URL, then runs the runtime-role verifier using `DATABASE_URL`; the API will not start if the runtime role can bypass RLS, administer roles/database, create schema objects, or own tenant tables.
 
 ## Connect the repository
 
-1. Sign in to Render.
-2. Open [New Blueprint](https://dashboard.render.com/blueprints).
-3. Choose **Connect a repository** and authorize GitHub if prompted.
-4. Select `ReignnRule11/PulseGridHealth`.
-5. Render detects the root `render.yaml`. Review the three resources and confirm every plan is **Free** before applying.
-6. Apply the Blueprint. Do not change any plan to a paid tier without reviewing the exact price first.
-7. Wait for the API, web service and database to finish provisioning. Because automatic deploys are disabled, use the service dashboard's manual deploy action when you are ready to deploy a reviewed commit.
+1. Sign in to Render and open [New Blueprint](https://dashboard.render.com/blueprints).
+2. Connect GitHub and select `ReignnRule11/PulseGridHealth`.
+3. Review the root `render.yaml`. Confirm that the existing `pulsegrid-web` service and `pulsegrid-staging-db` database are still listed as retained legacy resources. If Render proposes deleting either existing resource, cancel the sync and resolve the Blueprint mismatch first.
+4. Apply the Blueprint only after confirming it preserves existing resources. The dashboard will ask you to supply the unsynced API environment values.
+5. In the API service's protected environment settings, set:
+   - `DATABASE_URL`: Neon pooled runtime connection string.
+   - `MIGRATION_DATABASE_URL`: Neon direct migration-owner connection string.
+   - `CORS_ORIGINS`: exact Vercel origin, e.g. `https://your-project.vercel.app`. Do not use `*`.
+6. Keep `AI_ENABLED=false` and automatic deploys disabled.
+7. Do not paste either database URL or the bootstrap token into GitHub, chat, logs or screenshots.
 
-## Deployment-specific implementation notes
+## Deployment and verification
 
-- Render's managed PostgreSQL connection string uses `postgresql://`; the API settings normalize it to the installed Psycopg 3 SQLAlchemy dialect.
-- Free web services do not support Render's `preDeployCommand`. To keep this no-cost staging path deployable, the API start command runs `alembic upgrade head` before starting Uvicorn. This is acceptable only for this single-instance, synthetic-data staging environment. Before a paid or multi-instance deployment, move migrations into a dedicated release/pre-deploy step and use separate migration/runtime database roles.
-- The API health check is `/health`; after the first start, separately verify `/ready` returns 200. A healthy process with an unavailable database is not ready.
-- The frontend build embeds `NEXT_PUBLIC_API_URL`; changing the API hostname requires a frontend rebuild.
-- The generated `BOOTSTRAP_TOKEN` is available only in Render's protected environment settings. Do not paste it into chat, GitHub issues, logs or source files. Use it only for the first administrator bootstrap, then rotate/unset it.
+1. Review the exact commit and CI result before using Render's manual deploy.
+2. Confirm the migration step completes successfully.
+3. Confirm the runtime-role verification reports PASS before Uvicorn starts.
+4. Confirm Render's API HTTPS URL and deployed commit SHA.
+5. Check API `/health` returns HTTP 200.
+6. Check API `/ready` returns HTTP 200 and database reachable.
+7. Deploy the frontend to Vercel using its default `*.vercel.app` domain. Set the Vercel server-side environment variable `API_BACKEND_ORIGIN` to the Render HTTPS origin (e.g. `https://your-api.onrender.com`). Do not set `NEXT_PUBLIC_API_URL` in production; the browser must use relative `/api/...` paths through the same-origin rewrite. Set Render `CORS_ORIGINS` to the exact Vercel origin.
+8. Run the complete synthetic browser workflow: bootstrap, sign-in, organization selection, CSV import, alert review, invitation/role restrictions, cross-tenant denial and sign-out.
+9. Inspect cookies on the Vercel origin: session cookie must be Secure, HttpOnly and SameSite=Strict; CSRF cookie must be Secure and SameSite=Strict. Confirm the browser never calls the Render origin directly for authenticated API requests.
+10. Record results in [E1 tracking issue](https://github.com/ReignnRule11/PulseGridHealth/issues/1).
 
-## Required post-deploy verification
+## Limits and remaining gates
 
-1. Confirm both services have HTTPS URLs and record the deployed commit SHA.
-2. Open the API `/health` endpoint; expect HTTP 200.
-3. Open the API `/ready` endpoint; expect HTTP 200 and database reachable.
-4. Verify the API's environment has `APP_ENV=production`, exact `CORS_ORIGINS`, a generated bootstrap token and `AI_ENABLED=false`.
-5. Run the complete synthetic browser workflow: bootstrap, sign-in, organization selection, CSV import, alert review, invitation/role restrictions, cross-tenant denial and sign-out.
-6. Inspect cookie attributes: session cookie must be Secure, HttpOnly and SameSite=Strict; CSRF cookie must be Secure and SameSite=Strict.
-7. Verify PostgreSQL runtime role is non-superuser and NOBYPASSRLS, and repeat tenant-isolation tests against the hosted database.
-8. Record results in [E1 tracking issue](https://github.com/ReignnRule11/PulseGridHealth/issues/1).
+The free Render web services may spin down after inactivity and cold-start slowly. The retained legacy Render database is not connected to the new API and must not be deleted until any needed data has been exported and the user explicitly approves its retirement. Confirm current plan limits and pricing before applying; do not assume free-tier availability or durability. Neon plan limits, compute scale-to-zero, connection limits, backup/restore retention and pricing must also be reviewed in the Neon console. This setup is synthetic staging only.
 
-A successful Render deploy is not proof of the complete E1 acceptance criteria. Rate limiting, redacted logs, encrypted backups/restore, independent security/privacy review and data-authority approval remain outstanding. Do not load real health data until E1 is formally complete.
+Rate limiting, provider/edge log inspection, encrypted backup/restore rehearsal, uptime/error alerting, independent security/privacy review and data-authority approval remain outstanding. Do not load real health data until E1 is formally complete.

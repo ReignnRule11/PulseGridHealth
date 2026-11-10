@@ -6,20 +6,19 @@ This is a controlled-pilot starting point, not evidence that a production enviro
 
 1. Select a reviewed immutable Git commit and record its SHA.
 2. Confirm CI passed for that exact SHA.
-3. Build frontend and API images from that SHA; tag with the full Git SHA.
-4. Confirm the database backup completed and the restore point meets the approved RPO.
-5. Run Alembic migrations once as a release job, not from every application worker.
-6. Deploy API and web privately behind the TLS edge proxy.
-7. Verify /health, /ready, login, role restrictions, CSV import, alert review and logout using synthetic aggregate data.
-8. Stop rollout if smoke tests fail. Revert application images to the previous immutable tag. Do not automatically downgrade the database; use a reviewed forward fix unless a rollback migration exists.
-9. Record operator, commit, timestamps, smoke results and incident/ticket reference.
+3. Confirm the Neon backup/restore controls and restore point meet the approved RPO.
+4. Run Alembic migrations once with the dedicated migration-owner connection.
+5. Deploy the API and frontend behind the intended HTTPS origin arrangement.
+6. Verify /health, /ready, login, role restrictions, CSV import, alert review and logout using synthetic aggregate data.
+7. Stop rollout if smoke tests fail. Revert the application to the previous immutable commit. Do not automatically downgrade the database; use a reviewed forward fix unless a rollback migration exists.
+8. Record operator, commit, timestamps, smoke results and incident/ticket reference.
 
 ## 2. Edge proxy and rate limiting
 
-The deploy/nginx/nginx.conf file is a template for a single HTTPS origin. Before use:
+The deploy/nginx/nginx.conf file is a template for a single HTTPS origin. It is not active merely because it exists in the repository. Before use:
 
 - Replace the example hostname and certificate paths; configure DNS, valid TLS and automated renewal.
-- Ensure only Nginx is public. Bind API, web and PostgreSQL ports to private networking.
+- Ensure only the edge proxy is public. Keep database access restricted.
 - Configure upstream DNS names to match private service names.
 - Create /etc/nginx/snippets/pulsegrid-proxy-headers.conf with these directives:
 
@@ -35,50 +34,31 @@ The deploy/nginx/nginx.conf file is a template for a single HTTPS origin. Before
 - Run nginx -t before reload.
 - Supplied rate limits are conservative starting values, not load-tested capacity guarantees.
 - If Nginx is behind a load balancer/CDN, configure real-client-IP handling only for that provider's trusted IP ranges. Never trust arbitrary client-supplied X-Forwarded-For.
-- Review 429 counts. Nginx access logs intentionally omit query strings. The Render API command disables Uvicorn access logs because default request-target logging is not an approved redaction policy. Verify provider logs separately; they must not include cookies, tokens, request bodies or health observations.
+- Review 429 counts. Nginx access logs intentionally omit query strings. The Render API command disables Uvicorn access logs; verify provider logs separately.
 
 The template keys limits by $remote_addr. If behind another proxy, trusted client-IP handling is a prerequisite or limits may apply to the load balancer.
 
 ## 3. PostgreSQL controls
 
-- Use a dedicated runtime role with NOSUPERUSER and NOBYPASSRLS; never use the migration owner or a superuser at runtime.
-- Keep PostgreSQL private and restrict connections to API, backup and approved administration paths.
-- Run `python scripts/verify_rls.py` with the migration/test owner to exercise tenant isolation, then run `python scripts/verify_runtime_role.py` with the exact API `DATABASE_URL`. The runtime check must pass for the actual non-superuser, non-BYPASSRLS role and all nine forced-RLS tenant tables.
+- Use a dedicated runtime role with NOSUPERUSER, NOBYPASSRLS, NOCREATEROLE, NOCREATEDB and NOREPLICATION; never use the migration owner or a superuser at runtime.
+- The runtime role must not own tenant tables, inherit the migration-owner role, create objects in the application schema or create schemas in the database.
+- Keep `DATABASE_URL` (runtime, pooled Neon endpoint) separate from `MIGRATION_DATABASE_URL` (direct migration-owner endpoint).
+- Run `python scripts/verify_rls.py` with the migration/test owner to exercise tenant isolation, then run `python scripts/verify_runtime_role.py` with the exact API `DATABASE_URL`. The runtime check must pass for all nine forced-RLS tenant tables.
 - Store credentials in a secret manager and rotate under a documented change procedure.
-- Require database TLS when not on a trusted private network.
+- Require database TLS.
 
 ## 4. Encrypted backup and restore rehearsal
 
-Choose and document backup provider, encryption-key owner, retention, access policy, RPO and RTO before pilot. Example below uses PostgreSQL custom-format dumps encrypted with age; a managed backup service is acceptable if it provides equivalent encryption and restore evidence.
+Choose and document backup provider, encryption-key owner, retention, access policy, RPO and RTO before pilot. Neon managed backup/restore capabilities and retention depend on the selected plan; verify the actual plan and perform an isolated restore rehearsal. An encrypted logical export to private object storage is an alternative, using a dedicated least-privilege backup identity.
 
-Create a backup with a dedicated least-privilege backup identity:
-
-    pg_dump --format=custom --no-owner --no-acl "$BACKUP_DATABASE_URL" | age -r "$BACKUP_AGE_RECIPIENT" > "pulsegrid-$(date -u +%Y%m%dT%H%M%SZ).dump.age"
-
-Store the encrypted artifact in private object storage with versioning and retention controls. Keep the decryption identity separate from the application runtime and restrict it to designated recovery operators. Never place decrypted dumps in shared folders.
-
-Restore rehearsal into an isolated, empty recovery database:
-
-    age -d -i "$BACKUP_AGE_IDENTITY_FILE" backup.dump.age | pg_restore --no-owner --no-acl --dbname="$RESTORE_DATABASE_URL"
-
-Then:
-
-1. Record backup timestamp, source commit/schema revision, checksum and restore start/end times.
-2. Verify expected tables, Alembic revision, organisation counts and synthetic fixture counts.
-3. Run readiness, authentication, tenant-isolation and RLS smoke tests against the restored database.
-4. Confirm no production credentials or real health records were copied into test.
-5. Compare actual recovery time and backup age against proposed RTO/RPO.
-6. Destroy isolated restore environment and temporary plaintext material securely.
-7. Remediate and repeat any failed check.
-
-A green backup job is not a successful restore rehearsal. Attach the actual run record and operator sign-off before marking E1 backup acceptance complete.
+A successful backup job is not a successful restore rehearsal. Record backup timestamp, schema revision, checksum, restore start/end times, smoke-test results, actual RTO/RPO and operator sign-off. Destroy isolated restore environments and temporary plaintext material securely.
 
 ## 5. Monitoring and incident response
 
 Minimum pilot signals:
 - API /health and /ready availability and latency.
 - HTTP 5xx, 429 events, authentication failures/lockouts and upload rejections.
-- Database connections, storage, CPU, replication/backup health and migration failures.
+- Database connections, storage, CPU, compute availability, backup health and migration failures.
 - Process restarts and deployment health.
 
 Operational logs must not contain passwords, session/CSRF/invitation/bootstrap tokens, cookies, authorization headers, CSV contents, individual observations or free-text clinical/workforce notes. Keep security/audit records access-controlled and separate from general request logs. Define alert owners and escalation before pilot.
