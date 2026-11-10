@@ -98,7 +98,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
     const body = new FormData();
     body.append(
       "file",
-      new Blob(["domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"], { type: "text/csv" }),
+      new Blob(["domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"], { type: "text/csv" }),
       "empty.csv"
     );
     const response = await fetch("/api/v1/observations/import", {
