@@ -1,7 +1,6 @@
-# PulseGrid Health — temporary synthetic-data staging on Render.
-# All services are deliberately on the free tier. Free Postgres expires after
-# 30 days and has no backups; this is NOT a production or pilot-data environment.
-# Keep AI disabled. Do not upload patient or employee records.
+# PulseGrid Health — synthetic-data-only API staging on Render.
+# PostgreSQL is hosted separately on Neon. No database or frontend is provisioned here.
+# Do not load patient, employee, or other sensitive health data.
 services:
   - type: web
     name: pulsegrid-api
@@ -10,22 +9,22 @@ services:
     region: frankfurt
     rootDir: apps/api
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    # Free web services do not support preDeployCommand. This single-instance
-    # staging configuration runs idempotent Alembic migrations at startup.
-    # Move migrations to preDeployCommand before using a paid/multi-instance setup.
-    # Suppress Uvicorn access logs: default request-target logging is not part of the redacted log policy.
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log
+    # Free Render services do not support preDeployCommand. This single-instance
+    # synthetic staging service applies migrations with a separate owner URL,
+    # then verifies the restricted runtime URL before starting the API.
+    # Move migrations to a dedicated release step before paid/multi-instance use.
+    startCommand: alembic upgrade head && python scripts/verify_runtime_role.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log
     healthCheckPath: /health
     autoDeployTrigger: 'off'
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: pulsegrid-staging-db
-          property: connectionString
+        sync: false
+      - key: MIGRATION_DATABASE_URL
+        sync: false
       - key: APP_ENV
         value: production
       - key: CORS_ORIGINS
-        value: https://pulsegrid-web.onrender.com
+        sync: false
       - key: BOOTSTRAP_TOKEN
         generateValue: true
       - key: SESSION_TTL_HOURS
@@ -42,25 +41,3 @@ services:
         value: "20"
       - key: AI_ENABLED
         value: "false"
-
-  - type: web
-    name: pulsegrid-web
-    runtime: node
-    plan: free
-    region: frankfurt
-    rootDir: apps/web
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
-    healthCheckPath: /
-    autoDeployTrigger: 'off'
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://pulsegrid-api.onrender.com
-
-databases:
-  - name: pulsegrid-staging-db
-    databaseName: pulsegrid_staging
-    user: pulsegrid_app
-    plan: free
-    region: frankfurt
-    postgresMajorVersion: "16"
