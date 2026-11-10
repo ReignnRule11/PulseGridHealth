@@ -48,7 +48,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: apps/web
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
     healthCheckPath: /
     autoDeployTrigger: 'off'
