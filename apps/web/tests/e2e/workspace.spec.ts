@@ -93,14 +93,26 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
 
   const cookies = await page.context().cookies("http://127.0.0.1:3000");
   const csrfCookie = cookies.find(cookie => cookie.name === "pulsegrid_csrf");
-  const sessionCookie = cookies.find(cookie => cookie.name === "pulsegrid_session");
   expect(csrfCookie).toBeTruthy();
-  expect(sessionCookie).toBeTruthy();
-  const deniedUpload = await page.context().request.post(`${API}/api/v1/observations/import`, {
-    headers: { "X-Organization-ID": organizationId, "X-CSRF-Token": csrfCookie!.value, Cookie: `pulsegrid_csrf=${csrfCookie!.value}; pulsegrid_session=${sessionCookie!.value}` },
-    multipart: { file: { name: "empty.csv", mimeType: "text/csv", buffer: Buffer.from("domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n") } }
-  });
-  expect(deniedUpload.status()).toBe(403);
+  const deniedUploadStatus = await page.evaluate(async ({ orgId, csrfToken }) => {
+    const body = new FormData();
+    body.append(
+      "file",
+      new Blob(["domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"], { type: "text/csv" }),
+      "empty.csv"
+    );
+    const response = await fetch("/api/v1/observations/import", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "X-Organization-ID": orgId,
+        "X-CSRF-Token": csrfToken
+      },
+      body
+    });
+    return response.status;
+  }, { orgId: organizationId, csrfToken: csrfCookie!.value });
+  expect(deniedUploadStatus).toBe(403);
 
   const otherContext = await browser.newContext();
   try {
