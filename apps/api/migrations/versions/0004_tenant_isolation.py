@@ -12,6 +12,9 @@ TENANT_TABLES = [
     "data_sources", "health_observations", "detection_results", "alerts",
     "investigations", "response_actions", "audit_logs",
 ]
+# These tables already received organization_id and foreign keys in 0001_initial.
+# They still need database-enforced tenant isolation, not only application filters.
+RLS_TABLES = TENANT_TABLES + ["communities", "workforce_groups"]
 
 
 def upgrade():
@@ -56,6 +59,8 @@ def upgrade():
         op.alter_column(table, "organization_id", nullable=False)
         op.create_foreign_key(f"fk_{table}_organization", table, "organizations", ["organization_id"], ["id"])
         op.create_index(f"ix_{table}_organization_id", table, ["organization_id"])
+
+    for table in RLS_TABLES:
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
         op.execute(f"""
@@ -66,10 +71,11 @@ def upgrade():
 
 
 def downgrade():
-    for table in reversed(TENANT_TABLES):
+    for table in reversed(RLS_TABLES):
         op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
+    for table in reversed(TENANT_TABLES):
         op.drop_index(f"ix_{table}_organization_id", table_name=table)
         op.drop_constraint(f"fk_{table}_organization", table, type_="foreignkey")
         op.drop_column(table, "organization_id")
