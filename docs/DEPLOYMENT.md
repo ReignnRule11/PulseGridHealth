@@ -7,8 +7,10 @@ PulseGrid Health is a demonstration MVP. Passing CI does not authorize productio
 - Deploy the Next.js frontend to Vercel when ready and the FastAPI API to Render.
 - Use Neon PostgreSQL as the managed database; keep database access private to approved services and administration.
 - Use a dedicated migration-owner connection for Alembic and a separate restricted runtime role for API requests.
-- Prefer a same-site custom-domain arrangement, such as the frontend at the apex/www host and the API at an `api.` subdomain, after verifying cookie and CORS behavior.
-- Use exact CORS origins only; no wildcard.
+- Use Vercel and Render default HTTPS domains; a custom domain is not required for staging.
+- Route browser API traffic through a Vercel same-origin rewrite (`/api/*` → Render API). This keeps session and CSRF cookies on the Vercel origin with `SameSite=Strict`; do not point browser requests directly at the Render hostname.
+- Set Vercel `API_BACKEND_ORIGIN` to the Render HTTPS origin (for example, `https://your-api.onrender.com`). This is server-side configuration and must not use a `NEXT_PUBLIC_` prefix.
+- Keep `NEXT_PUBLIC_API_URL` unset in production so the browser uses relative `/api/...` paths. Use exact `CORS_ORIGINS=https://your-project.vercel.app` in Render; no wildcard.
 - A reference Nginx edge template with HTTPS, security headers, request limits and query-string-free access logs is in deploy/nginx/nginx.conf. It is a template, not active protection on Render.
 
 ## Required environment
@@ -17,13 +19,14 @@ Render API:
 - `APP_ENV=production`
 - `DATABASE_URL`: Neon runtime connection using the restricted application role. Prefer Neon's pooled connection endpoint for application traffic.
 - `MIGRATION_DATABASE_URL`: Neon direct (non-pooler) connection using the migration-owner role. Alembic uses this URL; the API process does not.
-- `CORS_ORIGINS`: exact browser frontend origin(s), comma-separated only if genuinely required.
+- `CORS_ORIGINS`: the exact Vercel frontend origin, e.g. `https://your-project.vercel.app`; no wildcard.
 - `BOOTSTRAP_TOKEN`: high-entropy secret for initial administrator bootstrap. Deliver through the provider secret manager, never source control. After bootstrap, rotate or unset it.
 - Set `SESSION_TTL_HOURS`, `INVITATION_TTL_HOURS`, `MAX_UPLOAD_MB`, `MIN_BASELINE_POINTS`, `ANOMALY_Z_THRESHOLD` and `MIN_WORKFORCE_COHORT_SIZE` to reviewed values.
 - Keep `AI_ENABLED=false` until the AI feature has a separate security, privacy and cost review.
 
 Vercel frontend (when deployed):
-- `NEXT_PUBLIC_API_URL`: the public API base URL, for example `https://api.your-domain.example`. It is public configuration, not a secret.
+- `API_BACKEND_ORIGIN`: Render API HTTPS origin, e.g. `https://your-api.onrender.com`. This is consumed by Next.js server rewrites; do not expose it as `NEXT_PUBLIC_*`.
+- Leave `NEXT_PUBLIC_API_URL` unset in production; the browser uses same-origin `/api/...` URLs.
 - Never put database URLs, bootstrap tokens or other secrets in `NEXT_PUBLIC_*` variables.
 
 ## Release procedure
@@ -36,7 +39,7 @@ Vercel frontend (when deployed):
 6. Deploy the API from a reviewed immutable commit.
 7. Confirm GET `/health` returns HTTP 200; this is liveness only.
 8. Confirm GET `/ready` returns HTTP 200 and a ready/database-reachable response. A 503 means database unavailable.
-9. When the frontend is deployed, confirm browser sign-in, organization selection, CSV import, alert review and sign-out using synthetic aggregate data.
+9. When the frontend is deployed, confirm the Vercel `/api/*` rewrite reaches Render and verify browser sign-in, organization selection, CSV import, alert review and sign-out using synthetic aggregate data.
 10. Confirm cross-organization access is denied and role permissions match the role matrix.
 11. Confirm browser cookies are Secure, HttpOnly for session, SameSite=Strict and scoped to intended host/path.
 12. Confirm backup restoration, monitoring, alerting, secret rotation and incident response before real operational use.
