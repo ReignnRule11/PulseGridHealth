@@ -41,6 +41,11 @@ jobs:
         run: |
           alembic upgrade head
           python scripts/verify_rls.py
+          psql "postgresql://pulsegrid:pulsegrid@localhost:5432/pulsegrid_test" -v ON_ERROR_STOP=1 -c "CREATE ROLE pulsegrid_runtime LOGIN PASSWORD 'runtime-test-password' NOSUPERUSER NOBYPASSRLS"
+          psql "postgresql://pulsegrid:pulsegrid@localhost:5432/pulsegrid_test" -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO pulsegrid_runtime"
+          psql "postgresql://pulsegrid:pulsegrid@localhost:5432/pulsegrid_test" -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO pulsegrid_runtime"
+          psql "postgresql://pulsegrid:pulsegrid@localhost:5432/pulsegrid_test" -v ON_ERROR_STOP=1 -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO pulsegrid_runtime"
+          DATABASE_URL="postgresql+psycopg://pulsegrid_runtime:runtime-test-password@localhost:5432/pulsegrid_test" python scripts/verify_runtime_role.py
           alembic downgrade base
           alembic upgrade head
 

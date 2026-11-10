@@ -14,7 +14,8 @@ PulseGrid Health is a demonstration MVP. Passing CI does not authorize productio
 
 API:
 - APP_ENV=production
-- DATABASE_URL=postgresql+psycopg://... using the restricted application role.
+- DATABASE_URL=postgresql+psycopg://... using the restricted application role. Run `python scripts/verify_runtime_role.py` from `apps/api` with this exact URL after migrations; it fails if the connected or granted role is superuser/BYPASSRLS or if any tenant table lacks forced RLS and a policy.
+- Keep the migration-owner connection separate from the application runtime connection. Do not reuse the Render Blueprint's database-owner connection for a pilot runtime.
 - CORS_ORIGINS=https://your-frontend.example with exact origins only; no wildcard.
 - BOOTSTRAP_TOKEN: high-entropy secret for initial administrator bootstrap. Deliver through secret manager, never source control. After bootstrap, rotate or unset it.
 - Set SESSION_TTL_HOURS, INVITATION_TTL_HOURS, MAX_UPLOAD_MB, MIN_BASELINE_POINTS, ANOMALY_Z_THRESHOLD and MIN_WORKFORCE_COHORT_SIZE to reviewed values.
@@ -42,7 +43,7 @@ Never put secrets in NEXT_PUBLIC_* variables. Never commit a real .env file.
 - Deploy gateway rate limiting for login, bootstrap, invitation acceptance and uploads. The reference Nginx config provides starting limits; it is not active until deployed at the public edge.
 - Add account recovery, account deactivation, session revocation management and secure invitation delivery.
 - Configure encrypted backups, tested restoration, retention/deletion policy and audit-log access controls.
-- Add operational monitoring without logging passwords, session tokens, invitation tokens, CSV contents or sensitive observations.
+- Disable default request-target access logging at the API server and configure provider/edge logs to omit query strings, cookies, authorization headers, request bodies, CSV contents and sensitive observations. Review actual provider logs before pilot.
 - Complete independent security/privacy review and applicable legal/regulatory assessment.
 - Validate workforce cohort suppression threshold and aggregation rules with domain experts.
 - Use synthetic or explicitly authorized aggregate data only until all controls are independently verified.

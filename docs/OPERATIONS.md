@@ -35,7 +35,7 @@ The deploy/nginx/nginx.conf file is a template for a single HTTPS origin. Before
 - Run nginx -t before reload.
 - Supplied rate limits are conservative starting values, not load-tested capacity guarantees.
 - If Nginx is behind a load balancer/CDN, configure real-client-IP handling only for that provider's trusted IP ranges. Never trust arbitrary client-supplied X-Forwarded-For.
-- Review 429 counts. Access logs intentionally omit query strings and must never include cookies, tokens, request bodies or health observations.
+- Review 429 counts. Nginx access logs intentionally omit query strings. The Render API command disables Uvicorn access logs because default request-target logging is not an approved redaction policy. Verify provider logs separately; they must not include cookies, tokens, request bodies or health observations.
 
 The template keys limits by $remote_addr. If behind another proxy, trusted client-IP handling is a prerequisite or limits may apply to the load balancer.
 
@@ -43,7 +43,7 @@ The template keys limits by $remote_addr. If behind another proxy, trusted clien
 
 - Use a dedicated runtime role with NOSUPERUSER and NOBYPASSRLS; never use the migration owner or a superuser at runtime.
 - Keep PostgreSQL private and restrict connections to API, backup and approved administration paths.
-- Run existing PostgreSQL RLS verification against a production-equivalent restricted role after migrations.
+- Run `python scripts/verify_rls.py` with the migration/test owner to exercise tenant isolation, then run `python scripts/verify_runtime_role.py` with the exact API `DATABASE_URL`. The runtime check must pass for the actual non-superuser, non-BYPASSRLS role and all nine forced-RLS tenant tables.
 - Store credentials in a secret manager and rotate under a documented change procedure.
 - Require database TLS when not on a trusted private network.
 
@@ -108,10 +108,10 @@ For workforce data, cohort size must be known and meet the reviewed suppression 
 | Evidence | Required proof | Status |
 |---|---|---|
 | Deployment | HTTPS URL, deployed commit SHA, provider and region | Not supplied |
-| Browser workflow | E2E run for bootstrap, login, invite, import, review, role denial, tenant isolation, logout | Not run |
-| RLS | PostgreSQL verification using restricted NOBYPASSRLS role | CI verified; hosted environment pending |
+| Browser workflow | E2E run for bootstrap, login, invite, import, review, role denial, tenant isolation, logout | CI passed on merged main commit; hosted staging smoke test pending |
+| RLS | PostgreSQL verification using restricted NOBYPASSRLS role | CI runtime-role check added; hosted environment pending |
 | Rate limiting | Deployed proxy config and observed 429 test | Template added; deployment pending |
-| Logging | Redaction review and sample log inspection | Template added; deployment pending |
+| Logging | Redaction review and sample log inspection | Uvicorn access logs disabled in Blueprint; provider log review pending |
 | Backup | Encrypted backup and successful isolated restore record | Not run |
 | Security/privacy | Independent review with no unresolved critical findings | Not completed |
 | Data authority | Signed pilot data authority and privacy gate | Not supplied |
