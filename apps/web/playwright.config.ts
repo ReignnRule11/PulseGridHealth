@@ -52,7 +52,7 @@ export default defineConfig({
       command: "npm run dev -- --hostname 127.0.0.1",
       cwd: ".",
       url: "http://127.0.0.1:3000",
-      env: { ...process.env, API_BACKEND_ORIGIN: "http://127.0.0.1:8000", NEXT_PUBLIC_API_URL: "" },
+      env: { ...process.env, API_BACKEND_ORIGIN: "http://127.0.0.1:8000" },
       reuseExistingServer: false,
       timeout: 60_000
     }
