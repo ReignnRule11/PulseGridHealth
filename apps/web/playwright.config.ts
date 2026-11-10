@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const databaseUrl = process.env.DATABASE_URL ?? "postgresql+psycopg://pulsegrid:pulsegrid@127.0.0.1:5432/pulsegrid_test";
 const parsedDatabaseUrl = new URL(databaseUrl);
-const databaseName = parsedDatabaseUrl.pathname.replace(/^\\//, "").toLowerCase();
+const databaseName = parsedDatabaseUrl.pathname.slice(1).toLowerCase();
 
 if (
   !["127.0.0.1", "localhost", "::1"].includes(parsedDatabaseUrl.hostname) ||
