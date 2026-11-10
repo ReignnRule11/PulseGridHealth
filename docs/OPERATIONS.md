@@ -108,7 +108,7 @@ For workforce data, cohort size must be known and meet the reviewed suppression 
 | Evidence | Required proof | Status |
 |---|---|---|
 | Deployment | HTTPS URL, deployed commit SHA, provider and region | Not supplied |
-| Browser workflow | E2E run for bootstrap, login, invite, import, review, role denial, tenant isolation, logout | Not run |
+| Browser workflow | E2E run for bootstrap, login, invite, import, review, role denial, tenant isolation, logout | CI passed on merged main commit; hosted staging smoke test pending |
 | RLS | PostgreSQL verification using restricted NOBYPASSRLS role | CI runtime-role check added; hosted environment pending |
 | Rate limiting | Deployed proxy config and observed 429 test | Template added; deployment pending |
 | Logging | Redaction review and sample log inspection | Uvicorn access logs disabled in Blueprint; provider log review pending |
