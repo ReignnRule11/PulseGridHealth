@@ -54,7 +54,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm run build
 
@@ -95,7 +97,7 @@ jobs:
         run: alembic upgrade head
       - name: Install frontend and Playwright dependencies
         working-directory: apps/web
-        run: npm install
+        run: npm ci
       - name: Install Chromium
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
