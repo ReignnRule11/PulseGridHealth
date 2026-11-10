@@ -1,5 +1,6 @@
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -37,3 +38,34 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+
+def resolve_migration_database_url(
+    database_url: str,
+    migration_database_url: str | None,
+    app_env: str,
+) -> str:
+    """Resolve Alembic's URL and enforce a distinct DDL role in production."""
+    if app_env.strip().lower() in {"production", "prod"}:
+        if not migration_database_url:
+            raise RuntimeError(
+                "MIGRATION_DATABASE_URL is required in production; refusing to run "
+                "Alembic with the restricted runtime DATABASE_URL."
+            )
+
+        runtime = make_url(database_url)
+        migration = make_url(migration_database_url)
+        if not runtime.drivername.startswith("postgresql") or not migration.drivername.startswith("postgresql"):
+            raise RuntimeError("Production runtime and migration URLs must both target PostgreSQL.")
+        if not runtime.username or not migration.username or runtime.username == migration.username:
+            raise RuntimeError(
+                "Production MIGRATION_DATABASE_URL must use a distinct database role "
+                "from the runtime DATABASE_URL."
+            )
+        if not runtime.database or runtime.database != migration.database:
+            raise RuntimeError(
+                "Production runtime and migration URLs must target the same database."
+            )
+
+    return migration_database_url or database_url
