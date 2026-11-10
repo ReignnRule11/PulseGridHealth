@@ -1,5 +1,8 @@
-# PulseGrid Health — synthetic-data-only API staging on Render.
-# PostgreSQL is hosted separately on Neon. No database or frontend is provisioned here.
+# PulseGrid Health — synthetic-data-only staging resources.
+# Primary staging topology: Vercel frontend + Render API + Neon PostgreSQL.
+# Keep the pre-existing Render web service and PostgreSQL resource in this Blueprint
+# so a Blueprint sync does not remove them. They are retained as legacy fallback
+# resources and are NOT connected to the new API. Do not delete them without approval.
 # Do not load patient, employee, or other sensitive health data.
 services:
   - type: web
@@ -41,3 +44,27 @@ services:
         value: "20"
       - key: AI_ENABLED
         value: "false"
+
+  # Retained legacy fallback. Not the primary frontend deployment.
+  - type: web
+    name: pulsegrid-web
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: apps/web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start -- --hostname 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    autoDeployTrigger: 'off'
+    envVars:
+      - key: API_BACKEND_ORIGIN
+        value: https://pulsegrid-api.onrender.com
+
+databases:
+  # Retained legacy fallback database. The API now uses Neon via protected env vars.
+  - name: pulsegrid-staging-db
+    databaseName: pulsegrid_staging
+    user: pulsegrid_app
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"
