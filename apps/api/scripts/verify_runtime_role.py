@@ -27,6 +27,12 @@ def main() -> int:
     if not database_url:
         print("FAIL: DATABASE_URL is required; no database was contacted.")
         return 2
+    # Neon/provider connection strings commonly use postgresql://; this project
+    # installs Psycopg 3 rather than psycopg2, so select that driver explicitly.
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
+    elif database_url.startswith("postgresql://"):
+        database_url = "postgresql+psycopg://" + database_url[len("postgresql://"):]
 
     engine = create_engine(database_url, pool_pre_ping=True)
     failures = []
