@@ -1,8 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const databaseUrl = process.env.DATABASE_URL ?? "postgresql+psycopg://pulsegrid:pulsegrid@127.0.0.1:5432/pulsegrid_test";
+const parsedDatabaseUrl = new URL(databaseUrl);
+const databaseName = parsedDatabaseUrl.pathname.replace(/^\\//, "").toLowerCase();
+
+if (
+  !["127.0.0.1", "localhost", "::1"].includes(parsedDatabaseUrl.hostname) ||
+  !databaseName.endsWith("_test")
+) {
+  throw new Error("Playwright E2E requires a local PostgreSQL database whose name ends in _test. Refusing to start.");
+}
+
 const apiEnv = {
   APP_ENV: "test",
-  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql+psycopg://pulsegrid:pulsegrid@127.0.0.1:5432/pulsegrid_test",
+  DATABASE_URL: databaseUrl,
   CORS_ORIGINS: "http://127.0.0.1:3000",
   BOOTSTRAP_TOKEN: "e2e-bootstrap-token-placeholder",
   SESSION_TTL_HOURS: "12",
@@ -34,7 +45,7 @@ export default defineConfig({
       cwd: "../api",
       url: "http://127.0.0.1:8000/health",
       env: apiEnv,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 30_000
     },
     {
