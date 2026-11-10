@@ -569,7 +569,7 @@ Configure:
 - **Neon:** TLS-enabled pooled runtime connection and direct migration connection; runtime role must not own tenant tables or have administrative/BYPASSRLS privileges.
 - Keep AI disabled and use synthetic aggregate data only.
 
-The Render Blueprint provisions only the FastAPI API. The frontend is deployed separately to Vercel; PostgreSQL is hosted separately on Neon. Review `docs/RENDER_STAGING.md` and `docs/NEON_SETUP.md` before provisioning. No Render service, Vercel project configuration, Neon database or secret has been created by this PR.
+The primary topology uses Vercel for the frontend, Render for FastAPI, and Neon for PostgreSQL. The Render Blueprint also retains the pre-existing `pulsegrid-web` and `pulsegrid-staging-db` resources as legacy fallbacks so a Blueprint sync does not remove them; they are not connected to the new API. Do not delete or repurpose those resources without an explicit backup and migration plan. Review `docs/RENDER_STAGING.md` and `docs/NEON_SETUP.md` before provisioning. This PR does not create a Vercel project, Neon database, or secret, and it does not authorize a Blueprint sync or deployment.
 
 Render's free web service may spin down and cold-start slowly. Review current Render and Neon plan limits, compute behavior, pricing, backup/restore retention and connection limits in the provider consoles before applying. This is synthetic staging, not a durable production or sensitive-data environment.
 
