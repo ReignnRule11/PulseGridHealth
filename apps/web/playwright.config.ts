@@ -53,7 +53,7 @@ export default defineConfig({
       cwd: ".",
       url: "http://127.0.0.1:3000",
       env: { ...process.env, NEXT_PUBLIC_API_URL: "http://127.0.0.1:8000" },
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 60_000
     }
   ]
