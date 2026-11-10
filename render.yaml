@@ -13,7 +13,8 @@ services:
     # Free web services do not support preDeployCommand. This single-instance
     # staging configuration runs idempotent Alembic migrations at startup.
     # Move migrations to preDeployCommand before using a paid/multi-instance setup.
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Suppress Uvicorn access logs: default request-target logging is not part of the redacted log policy.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log
     healthCheckPath: /health
     autoDeployTrigger: 'off'
     envVars:
