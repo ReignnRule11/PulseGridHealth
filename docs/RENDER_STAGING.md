@@ -1,10 +1,11 @@
 # Render API staging deployment with Neon
 
-This guide prepares a temporary, synthetic-data-only FastAPI staging deployment on Render using Neon PostgreSQL. It does not authorize a production deployment or real health data. The Blueprint provisions only the API; it does not create a Render database or deploy the frontend.
+This guide prepares a temporary, synthetic-data-only FastAPI staging deployment on Render using Neon PostgreSQL. It does not authorize a production deployment or real health data. The Blueprint configures the API and deliberately retains the existing `pulsegrid-web` and `pulsegrid-staging-db` resources as legacy fallbacks. Those legacy resources are not connected to the new API; do not remove them during a Blueprint sync.
 
 ## What the Blueprint configures
 
 - `pulsegrid-api`: FastAPI web service on Render.
+- `pulsegrid-web` and `pulsegrid-staging-db`: retained legacy resources, not used by the new Vercel + Neon topology.
 - Frankfurt Render region; choose a Neon region close to Frankfurt to reduce database latency.
 - Render-managed HTTPS endpoint; optionally attach your custom API subdomain after the service is deployed.
 - `DATABASE_URL` and `MIGRATION_DATABASE_URL` as manually supplied protected environment variables.
@@ -26,8 +27,8 @@ Do not use the Neon owner connection as the API runtime identity. Follow [NEON_S
 
 1. Sign in to Render and open [New Blueprint](https://dashboard.render.com/blueprints).
 2. Connect GitHub and select `ReignnRule11/PulseGridHealth`.
-3. Review the root `render.yaml`. It should show **one API service only** and no Render PostgreSQL resource.
-4. Apply the Blueprint. The dashboard will ask you to supply the unsynced environment values.
+3. Review the root `render.yaml`. Confirm that the existing `pulsegrid-web` service and `pulsegrid-staging-db` database are still listed as retained legacy resources. If Render proposes deleting either existing resource, cancel the sync and resolve the Blueprint mismatch first.
+4. Apply the Blueprint only after confirming it preserves existing resources. The dashboard will ask you to supply the unsynced API environment values.
 5. In the API service's protected environment settings, set:
    - `DATABASE_URL`: Neon pooled runtime connection string.
    - `MIGRATION_DATABASE_URL`: Neon direct migration-owner connection string.
@@ -50,6 +51,6 @@ Do not use the Neon owner connection as the API runtime identity. Follow [NEON_S
 
 ## Limits and remaining gates
 
-The free Render web service may spin down after inactivity and cold-start slowly. Confirm current plan limits and pricing before applying; do not assume free-tier availability or durability. Neon plan limits, compute scale-to-zero, connection limits, backup/restore retention and pricing must also be reviewed in the Neon console. This setup is synthetic staging only.
+The free Render web services may spin down after inactivity and cold-start slowly. The retained legacy Render database is not connected to the new API and must not be deleted until any needed data has been exported and the user explicitly approves its retirement. Confirm current plan limits and pricing before applying; do not assume free-tier availability or durability. Neon plan limits, compute scale-to-zero, connection limits, backup/restore retention and pricing must also be reviewed in the Neon console. This setup is synthetic staging only.
 
 Rate limiting, provider/edge log inspection, encrypted backup/restore rehearsal, uptime/error alerting, independent security/privacy review and data-authority approval remain outstanding. Do not load real health data until E1 is formally complete.
