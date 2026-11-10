@@ -532,7 +532,7 @@ The API settings are defined in `apps/api/app/core/config.py`. The main variable
 | Variable | Purpose | Default in application |
 |---|---|---|
 | `DATABASE_URL` | Neon PostgreSQL runtime SQLAlchemy connection URL | Required |
-| `MIGRATION_DATABASE_URL` | Separate direct PostgreSQL URL used by Alembic migrations | Falls back to `DATABASE_URL` |
+| `MIGRATION_DATABASE_URL` | Separate direct PostgreSQL URL used by Alembic migrations | Required in production; local/test only may fall back to `DATABASE_URL` |
 | `APP_ENV` | Runtime environment; controls production cookie security behavior | `development` |
 | `CORS_ORIGINS` | Comma-separated exact allowed browser origins | `http://localhost:3000` |
 | `MAX_UPLOAD_MB` | Maximum CSV upload size in MiB | `5` |
