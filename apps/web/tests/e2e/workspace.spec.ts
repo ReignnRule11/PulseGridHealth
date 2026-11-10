@@ -91,11 +91,11 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(viewerAlert).toBeVisible();
   await expect(viewerAlert.getByRole("button", { name: "Acknowledge" })).toHaveCount(0);
 
-  const cookies = await page.context().cookies(API);
+  const cookies = await page.context().cookies("http://127.0.0.1:3000");
   const csrfCookie = cookies.find(cookie => cookie.name === "pulsegrid_csrf");
   expect(csrfCookie).toBeTruthy();
   const deniedUpload = await page.context().request.post(`${API}/api/v1/observations/import`, {
-    headers: { "X-Organization-ID": organizationId, "X-CSRF-Token": csrfCookie!.value },
+    headers: { "X-Organization-ID": organizationId, "X-CSRF-Token": csrfCookie!.value, Cookie: "pulsegrid_csrf=" + csrfCookie!.value + "; pulsegrid_session=" + (await page.context().cookies("http://127.0.0.1:3000")).find(cookie => cookie.name === "pulsegrid_session")?.value },
     multipart: { file: { name: "empty.csv", mimeType: "text/csv", buffer: Buffer.from("domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n") } }
   });
   expect(deniedUpload.status()).toBe(403);
@@ -124,5 +124,5 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("button", { name: "Sign in securely" })).toBeVisible();
-  expect((await page.context().request.get(`${API}/api/v1/auth/me`)).status()).toBe(401);
+  expect(await page.evaluate(async () => (await fetch("/api/v1/auth/me", { credentials: "include", cache: "no-store" })).status)).toBe(401);
 });
