@@ -1,19 +1,18 @@
 # Database notes
 
-The first migration creates the core aggregate data model.
+The schema uses UUID primary keys, UTC timestamps, aggregate date-grained observations, mandatory source provenance and duplicate-protection constraints. Observations must belong to exactly one community or workforce group.
 
-Key rules:
-- UUID primary keys.
-- UTC timestamps.
-- Observations are date-grained and aggregate.
-- `community_id` XOR `workforce_group_id`.
-- Source provenance is mandatory.
-- Duplicate protection uses a unique key over source, group, date, and indicator.
-- Detection results retain model name/version and baseline evidence.
-- Alert records are candidate signals requiring human review.
+## Tenant isolation
 
-Before production:
-- Add organisation/tenant foreign keys to every tenant-owned table.
-- Enforce tenant-scoped queries and PostgreSQL RLS.
-- Add immutable audit events for sensitive operations.
-- Define retention and deletion policies.
+Alembic migration `0004_tenant_isolation` adds organization ownership to the observation, source, detection, alert, investigation, response-action and audit tables. It also enables and forces PostgreSQL row-level security for those tables and for the already organization-owned `communities` and `workforce_groups` tables.
+
+The tenant context is transaction-local (`app.organization_id`). Authenticated API requests establish it after verifying active organization membership. Every production runtime database role must be non-superuser and have `NOBYPASSRLS`; never run the application with the migration owner or a database superuser.
+
+## Before real operational data
+
+- Verify RLS against the exact hosted PostgreSQL role and schema after migrations.
+- Confirm every query is organization-scoped and every tenant-owned data table has an RLS policy.
+- Configure encrypted backups and complete a restore rehearsal.
+- Define retention, deletion, access-review and incident-response procedures.
+- Obtain data-controller authorization and independent security/privacy review.
+- Use synthetic or explicitly authorized aggregate data only until these gates are complete.
