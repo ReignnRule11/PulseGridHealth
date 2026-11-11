@@ -1,0 +1,55 @@
+name: Sync Reign main to Maddie main
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-reign-main-to-maddie-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fast-forward Maddie main from Reign main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Reign main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify token and sync Maddie main
+        env:
+          MADDIE_SYNC_TOKEN: ${{ secrets.MADDIE_SYNC_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MADDIE_SYNC_TOKEN:-}" ]]; then
+            echo "::error::Repository secret MADDIE_SYNC_TOKEN is missing."
+            exit 1
+          fi
+
+          AUTH_HEADER="$(printf 'x-access-token:%s' "$MADDIE_SYNC_TOKEN" | base64 -w 0)"
+
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
+            fetch --no-tags https://github.com/maddiiedev/PulseGridHealth.git main
+
+          if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "::error::Maddie main is not an ancestor of Reign main. Sync stopped to protect Maddie-only commits; resolve the divergence manually."
+            exit 1
+          fi
+
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic ${AUTH_HEADER}" \
+            push https://github.com/maddiiedev/PulseGridHealth.git HEAD:refs/heads/main
+
+          echo "Sync completed (or Maddie main was already up to date)."
