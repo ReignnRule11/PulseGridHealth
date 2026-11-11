@@ -29,6 +29,28 @@ async function bootstrap(request: APIRequestContext, email: string, organization
   return (await response.json()).organization_id as string;
 }
 
+async function resetE2EDatabase() {
+  // The E2E database is disposable and explicitly constrained to local *_test
+  // PostgreSQL by playwright.config.ts. Reset it before each attempt because
+  // Playwright retries reuse the same service container.
+  const script = [
+    "from sqlalchemy import text",
+    "from sqlalchemy.engine import make_url",
+    "from app.core.config import settings",
+    "from app.db import engine",
+    "url = make_url(settings.database_url)",
+    "assert (url.host or '').lower() in {'localhost', '127.0.0.1', '::1'}",
+    "assert (url.database or '').lower().endswith('_test')",
+    "with engine.begin() as connection:",
+    "    connection.execute(text('TRUNCATE TABLE organizations, users RESTART IDENTITY CASCADE'))",
+  ].join("\\n");
+  execFileSync("python", ["-c", script], {
+    cwd: "../api",
+    encoding: "utf8",
+    env: process.env,
+  });
+}
+
 async function seedSecondOrganization(email: string, organizationName: string) {
   // Cross-tenant authorization needs a second tenant, but public bootstrap is
   // deliberately one-time. Seed this isolated test tenant directly in the
@@ -84,6 +106,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   const adminEmail = `admin-${suffix}@pulsegrid-e2e.test`;
   const reviewerEmail = `reviewer-${suffix}@pulsegrid-e2e.test`;
   const viewerEmail = `viewer-${suffix}@pulsegrid-e2e.test`;
+  await resetE2EDatabase();
   const organizationId = await bootstrap(page.context().request, adminEmail, `PulseGrid E2E Authority ${suffix}`);
 
   await signIn(page, adminEmail, ADMIN_PASSWORD);
