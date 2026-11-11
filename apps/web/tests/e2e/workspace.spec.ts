@@ -43,7 +43,7 @@ async function resetE2EDatabase() {
     "assert (url.database or '').lower().endswith('_test')",
     "with engine.begin() as connection:",
     "    connection.execute(text('TRUNCATE TABLE organizations, users RESTART IDENTITY CASCADE'))",
-  ].join("\\n");
+  ].join("\n");
   execFileSync("python", ["-c", script], {
     cwd: "../api",
     encoding: "utf8",
