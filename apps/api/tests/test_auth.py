@@ -7,6 +7,8 @@ from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.db import Base, get_db
 from app.main import app
+from app.models import Organization, OrganizationMembership, User
+from app.security import _hash_password
 
 
 @pytest.fixture()
@@ -73,6 +75,25 @@ def test_bootstrap_login_me_and_logout(auth_client):
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
+def test_bootstrap_is_one_time_only(auth_client):
+    client = auth_client
+    first = _bootstrap(client)
+    assert first.status_code == 200
+
+    token = _csrf(client)
+    second = client.post("/api/v1/auth/bootstrap", headers={
+        "X-CSRF-Token": token, "X-Bootstrap-Token": "test-bootstrap-secret"
+    }, json={
+        "organization_name": "Second Health Authority",
+        "organization_type": "public_health",
+        "admin_email": "second-admin@example.org",
+        "admin_name": "Second Administrator",
+        "password": "Another-Strong-Password-2026!",
+    })
+    assert second.status_code == 409
+    assert second.json()["detail"] == "bootstrap_already_completed"
+
+
 def test_bootstrap_is_closed_without_secret(auth_client, monkeypatch):
     monkeypatch.setattr(settings, "bootstrap_token", "")
     client = auth_client
@@ -129,13 +150,24 @@ def test_organization_data_isolation_and_membership_enforcement(auth_client):
     first_login = _login(client, email="first-admin@example.org")
     first_org = first_login.json()["organizations"][0]["id"]
     csrf = _csrf(client)
-    second = client.post("/api/v1/auth/bootstrap", headers={
-        "X-CSRF-Token": csrf, "X-Bootstrap-Token": "test-bootstrap-secret"
-    }, json={"organization_name": "Second Health Authority", "organization_type": "public_health",
-             "admin_email": "second-admin@example.org", "admin_name": "Second Admin",
-             "password": "Second-Strong-Password-2026!"})
-    assert second.status_code == 200
-    second_org = second.json()["organization_id"]
+    # Seed a second tenant directly for this isolation test. The public bootstrap
+    # endpoint is intentionally one-time and must not be used for tenant creation.
+    db_dependency = app.dependency_overrides[get_db]()
+    db = next(db_dependency)
+    try:
+        second_organization = Organization(
+            name="Second Health Authority", organization_type="public_health")
+        second_user = User(
+            email="second-admin@example.org", full_name="Second Admin",
+            password_hash=_hash_password("Second-Strong-Password-2026!"))
+        db.add_all([second_organization, second_user])
+        db.flush()
+        db.add(OrganizationMembership(
+            organization_id=second_organization.id, user_id=second_user.id, role="org_admin"))
+        db.commit()
+        second_org = str(second_organization.id)
+    finally:
+        db_dependency.close()
     csrf = _csrf(client)
     rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     rows += "".join(f"community,ONLY-FIRST,SRC,2026-06-{day:02d},weekly_reports,{value},5000,reports\n"
