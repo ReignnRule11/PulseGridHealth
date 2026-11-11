@@ -175,17 +175,32 @@ def bootstrap(payload: BootstrapIn, request: Request, response: Response,
     configured = settings.bootstrap_token
     if not configured or not hmac.compare_digest(x_bootstrap_token, configured):
         raise HTTPException(status_code=403, detail="bootstrap_not_authorized")
+
+    # Serialize first-run attempts in PostgreSQL so two concurrent requests cannot
+    # both observe an empty installation and create separate initial administrators.
+    if db.bind and db.bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                   {"lock_key": 0x50554C5345424F4F})
+
+    # Bootstrap is only for the first organization and its first org_admin.
+    # Additional users must enter through an administrator-issued invitation.
+    if db.scalar(select(User.id).limit(1)) or db.scalar(select(Organization.id).limit(1)):
+        db.rollback()
+        raise HTTPException(status_code=409, detail="bootstrap_already_completed")
+
     email = payload.admin_email.strip().lower()
-    if db.scalar(select(User.id).where(User.email == email)):
-        raise HTTPException(status_code=409, detail="email_already_registered")
-    if db.scalar(select(Organization.id).where(Organization.name == payload.organization_name.strip())):
-        raise HTTPException(status_code=409, detail="organization_already_exists")
-    organization = Organization(name=payload.organization_name.strip(), organization_type=payload.organization_type.strip())
-    user = User(email=email, full_name=payload.admin_name.strip(), password_hash=_hash_password(payload.password))
-    db.add_all([organization, user])
-    db.flush()
-    db.add(OrganizationMembership(organization_id=organization.id, user_id=user.id, role="org_admin"))
-    db.commit()
+    organization = Organization(name=payload.organization_name.strip(),
+                                 organization_type=payload.organization_type.strip())
+    user = User(email=email, full_name=payload.admin_name.strip(),
+                password_hash=_hash_password(payload.password))
+    try:
+        db.add_all([organization, user])
+        db.flush()
+        db.add(OrganizationMembership(organization_id=organization.id, user_id=user.id, role="org_admin"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"organization_id": str(organization.id), "user_id": str(user.id), "status": "created"}
 
 
