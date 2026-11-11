@@ -458,9 +458,9 @@ Open the local URL printed by Next.js (normally `http://localhost:3000`). The AP
 
 ### 3. Bootstrap the first administrator
 
-Set a high-entropy `BOOTSTRAP_TOKEN` in the API environment before calling `POST /api/v1/auth/bootstrap`. First obtain a CSRF token from `GET /api/v1/auth/csrf`, then submit the bootstrap request with the CSRF token and `X-Bootstrap-Token` headers. Bootstrap creates the organization, user and `org_admin` membership. Sign in separately through the normal login endpoint.
+Set a high-entropy `BOOTSTRAP_TOKEN` in the API environment before calling `POST /api/v1/auth/bootstrap`. First obtain a CSRF token from `GET /api/v1/auth/csrf`, then submit the bootstrap request with the CSRF token and `X-Bootstrap-Token` headers. Bootstrap creates the first organization, user and `org_admin` membership. **It is a one-time installation operation:** once any organization or user exists, further bootstrap attempts return `409 bootstrap_already_completed`. Additional accounts must be created through an organization administrator's invitation flow. Sign in separately through the normal login endpoint.
 
-Rotate or unset the bootstrap token after the intended bootstrap operation. Do not commit it or share it in source control, logs or chat.
+Unset `BOOTSTRAP_TOKEN` immediately after the initial administrator has been created. Do not commit it or share it in source control, logs or chat.
 
 ### 4. Environment file safety
 
