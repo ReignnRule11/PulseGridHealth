@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   sync:
+    if: github.repository == 'ReignnRule11/PulseGridHealth'
     name: Fast-forward Maddie main from Reign main
     runs-on: ubuntu-latest
     steps:
