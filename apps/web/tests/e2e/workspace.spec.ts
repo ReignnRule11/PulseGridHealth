@@ -47,7 +47,7 @@ async function seedSecondOrganization(email: string, organizationName: string) {
     "    db.add(OrganizationMembership(organization_id=organization.id, user_id=user.id, role='org_admin'))",
     "    db.commit()",
     "    print(organization.id)",
-  ].join("\\n");
+  ].join("\n");
   return execFileSync("python", ["-c", script, email, organizationName, ADMIN_PASSWORD], {
     cwd: "../api",
     encoding: "utf8",
