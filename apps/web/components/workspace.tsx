@@ -1119,7 +1119,7 @@ export default function Workspace() {
             <p className="muted">Upload activity, new candidate alerts and review assignments for this organization.</p></div>
           <button className="button-secondary" onClick={loadWorkspace} disabled={busy}>Refresh notifications</button>
         </div>
-        {notifications.length === 0 ? <p className="muted">You're up to date. No notifications yet.</p> : <div className="review-list">
+        {notifications.length === 0 ? <p className="muted">You&apos;re up to date. No notifications yet.</p> : <div className="review-list">
           {notifications.map((item) => <article className="review-card" key={item.id}>
             <div className="review-heading"><strong>{item.title}</strong><span className="pending">{item.is_read ? "Read" : "Unread"}</span></div>
             <p>{item.message}</p><small className="muted">{new Date(item.created_at).toLocaleString()}</small>
