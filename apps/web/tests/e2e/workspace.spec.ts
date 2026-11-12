@@ -143,6 +143,11 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(page).toHaveURL(/\/settings\/profile$/);
   await expect(page.getByRole("heading", { name: "Personal information", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Change password" })).toHaveCount(0);
+  await expect(page.getByLabel("Full name")).toHaveValue("E2E Administrator");
+  await page.getByLabel("Full name").fill("E2E Updated Administrator");
+  await page.getByRole("button", { name: "Save personal information" }).click();
+  await expect(page.locator(".app-header")).toContainText("E2E Updated Administrator");
+  await expect(page.getByLabel("Full name")).toHaveValue("E2E Updated Administrator");
   await page.getByRole("link", { name: "Security", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/security$/);
   await expect(page.getByRole("heading", { name: "Change password" })).toBeVisible();
