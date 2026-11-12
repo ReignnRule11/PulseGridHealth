@@ -57,8 +57,22 @@ def upgrade():
     op.create_index("ix_notifications_organization_id", "notifications", ["organization_id"])
     op.create_index("ix_notifications_recipient_user_id", "notifications", ["recipient_user_id"])
 
+    # Enforce tenant isolation in PostgreSQL for both new organization-scoped tables.
+    for table in ("data_import_batches", "notifications"):
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+        op.execute(f"""
+            CREATE POLICY tenant_isolation ON {table}
+            USING (organization_id = NULLIF(current_setting('app.organization_id', true), '')::uuid)
+            WITH CHECK (organization_id = NULLIF(current_setting('app.organization_id', true), '')::uuid)
+        """)
+
 
 def downgrade():
+    for table in ("notifications", "data_import_batches"):
+        op.execute(f"DROP POLICY IF EXISTS tenant_isolation ON {table}")
+        op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
+        op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
     op.drop_index("ix_notifications_recipient_user_id", table_name="notifications")
     op.drop_index("ix_notifications_organization_id", table_name="notifications")
     op.drop_table("notifications")
