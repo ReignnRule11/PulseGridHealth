@@ -153,6 +153,34 @@ def test_role_scoped_workspace_reads_ingestion_review_and_csrf(client):
 
 
 
+def test_primary_admin_is_the_only_account_that_can_hold_admin_role(client):
+    organization_id = bootstrap(client)
+    _, admin_csrf = login(client, "admin@workspace.test", "Admin-Password-2026!")
+    denied_invite = client.post(
+        f"/api/v1/auth/organizations/{organization_id}/invitations",
+        headers={"X-Organization-ID": organization_id, "X-CSRF-Token": admin_csrf},
+        json={"email": "second-admin@workspace.test", "role": "org_admin"},
+    )
+    assert denied_invite.status_code == 422
+    member_token = invite(client, organization_id, "member@workspace.test", "analyst", admin_csrf)
+    accept(client, member_token, "Organization Member", "Member-Password-2026!")
+    admin_csrf = csrf(client)
+    access = client.get(f"/api/v1/auth/organizations/{organization_id}/access", headers={"X-Organization-ID": organization_id})
+    assert access.status_code == 200
+    primary = next(item for item in access.json()["members"] if item["email"] == "admin@workspace.test")
+    member = next(item for item in access.json()["members"] if item["email"] == "member@workspace.test")
+    assert primary["is_primary_admin"] is True
+    assert member["is_primary_admin"] is False
+    assert primary["role"] == "org_admin"
+    promote = client.patch(
+        f"/api/v1/auth/organizations/{organization_id}/members/{member["user_id"]}",
+        headers={"X-Organization-ID": organization_id, "X-CSRF-Token": admin_csrf},
+        json={"role": "org_admin"},
+    )
+    assert promote.status_code == 403
+    assert promote.json()["detail"] == "primary_admin_role_reserved"
+
+
 def test_ai_alert_explanation_security_grounding_and_provider_failures(client, monkeypatch):
     import urllib.error
     from uuid import UUID
