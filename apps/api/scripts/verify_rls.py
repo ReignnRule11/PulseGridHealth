@@ -21,6 +21,8 @@ TENANT_TABLES = (
     "audit_logs",
     "communities",
     "workforce_groups",
+    "data_import_batches",
+    "notifications",
 )
 EXERCISED_TABLES = {
     "data_sources": ("source_name",),
