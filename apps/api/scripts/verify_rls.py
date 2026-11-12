@@ -215,7 +215,7 @@ def main() -> int:
                 {"a": org_a, "b": org_b},
             )
         print(
-            "PostgreSQL tenant RLS checks passed: all 9 tenant tables have forced RLS "
+            "PostgreSQL tenant RLS checks passed: all 11 tenant tables have forced RLS "
             "and policies; cross-tenant reads and RLS write checks passed on 3 root tables."
         )
         return 0
