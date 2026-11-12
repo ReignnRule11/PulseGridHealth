@@ -49,7 +49,23 @@ type AlertItem = {
   severity: string;
   status: string;
   explanation: string;
+  assigned_to_user_id?: string | null;
+  uploaded_by?: string | null;
+  uploader_email?: string | null;
+  upload_filename?: string | null;
 };
+
+type UploadActivity = {
+  id: string; filename: string; file_size_bytes: number; status: string;
+  accepted: number; duplicates: number; rejected: number; alerts_created: number;
+  uploaded_by: string; uploader_email: string; created_at: string;
+};
+type NotificationItem = {
+  id: string; kind: string; title: string; message: string;
+  related_type: string | null; related_id: string | null;
+  is_read: boolean; created_at: string;
+};
+type ReviewerOption = { user_id: string; full_name: string; email: string; role: string };
 
 type Dashboard = {
   community_observations: number;
@@ -137,6 +153,10 @@ export default function Workspace() {
   const [orgId, setOrgId] = useState("");
   const [dashboard, setDashboard] = useState<Dashboard>(emptyDashboard);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [uploadActivity, setUploadActivity] = useState<UploadActivity[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [reviewers, setReviewers] = useState<ReviewerOption[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
@@ -278,12 +298,19 @@ export default function Workspace() {
     if (!me || !orgId) return;
 
     try {
-      const [d, a] = await Promise.all([
+      const role = me.organizations.find((organization) => organization.id === orgId)?.role;
+      const alertPath = role === "reviewer" ? "/api/v1/alerts/inbox" : "/api/v1/alerts?status=all";
+      const requests: Promise<Response>[] = [
         apiFetch("/api/v1/dashboard"),
-        apiFetch("/api/v1/alerts?status=all"),
-      ]);
+        apiFetch(alertPath),
+        apiFetch("/api/v1/notifications"),
+      ];
+      const uploadsIndex = role === "org_admin" || role === "analyst" ? requests.push(apiFetch("/api/v1/activity/uploads")) - 1 : -1;
+      const reviewersIndex = role === "org_admin" ? requests.push(apiFetch("/api/v1/reviewers")) - 1 : -1;
+      const responses = await Promise.all(requests);
+      const [d, a, n] = responses;
 
-      if (d.status === 401 || a.status === 401) {
+      if (d.status === 401 || a.status === 401 || n.status === 401) {
         setMe(null);
         setMessage("Your session has expired. Please sign in again.");
         return;
@@ -296,6 +323,21 @@ export default function Workspace() {
       setDashboard((await d.json()) as Dashboard);
       const alertData = await a.json();
       setAlerts((alertData.items ?? []) as AlertItem[]);
+      const notificationData = await n.json();
+      setNotifications((notificationData.items ?? []) as NotificationItem[]);
+      setUnreadNotifications(notificationData.unread_count ?? 0);
+      if (uploadsIndex >= 0) {
+        const uploadData = await responses[uploadsIndex].json();
+        setUploadActivity((uploadData.items ?? []) as UploadActivity[]);
+      } else {
+        setUploadActivity([]);
+      }
+      if (reviewersIndex >= 0) {
+        const reviewerData = await responses[reviewersIndex].json();
+        setReviewers((reviewerData.items ?? []) as ReviewerOption[]);
+      } else {
+        setReviewers([]);
+      }
     } catch (e) {
       setMessage(
         e instanceof Error ? e.message : "Workspace load failed"
@@ -670,6 +712,38 @@ export default function Workspace() {
     }
   }
 
+
+  async function markNotificationRead(item: NotificationItem) {
+    if (item.is_read) return;
+    try {
+      const response = await apiFetch(`/api/v1/notifications/${item.id}/read`, { method: "POST" });
+      if (!response.ok) throw new Error("Unable to update notification.");
+      setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, is_read: true } : entry));
+      setUnreadNotifications((count) => Math.max(0, count - 1));
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Unable to update notification.");
+    }
+  }
+
+  async function assignAlert(alertId: string, reviewerUserId: string) {
+    setBusy(true);
+    try {
+      const response = await apiFetch(`/api/v1/alerts/${alertId}/assignment`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewer_user_id: reviewerUserId || null }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Unable to assign alert.");
+      setMessage("Review assignment saved. The assigned reviewer has been notified.");
+      await loadWorkspace();
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Unable to assign alert.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generateAiExplanation(alert: AlertItem) {
     setAiBusy(alert.id);
     setMessage("");
@@ -992,6 +1066,7 @@ export default function Workspace() {
 
       <nav className="workspace-nav" aria-label="Workspace navigation">
         <Link href="/workspace" aria-current="page">Workspace</Link>
+        {(currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer") && <a href="#review-inbox">Review inbox</a>}
         <Link href="/settings/profile">Personal settings</Link>
         {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
       </nav>
@@ -1037,6 +1112,21 @@ export default function Workspace() {
           {message}
         </p>
       )}
+
+      <section className="card section" aria-label="Notifications">
+        <div className="section-heading">
+          <div><h2>Notifications {unreadNotifications > 0 ? `(${unreadNotifications} unread)` : ""}</h2>
+            <p className="muted">Upload activity, new candidate alerts and review assignments for this organization.</p></div>
+          <button className="button-secondary" onClick={loadWorkspace} disabled={busy}>Refresh notifications</button>
+        </div>
+        {notifications.length === 0 ? <p className="muted">You're up to date. No notifications yet.</p> : <div className="review-list">
+          {notifications.map((item) => <article className="review-card" key={item.id}>
+            <div className="review-heading"><strong>{item.title}</strong><span className="pending">{item.is_read ? "Read" : "Unread"}</span></div>
+            <p>{item.message}</p><small className="muted">{new Date(item.created_at).toLocaleString()}</small>
+            {!item.is_read && <button className="button-secondary" onClick={() => markNotificationRead(item)}>Mark as read</button>}
+          </article>)}
+        </div>}
+      </section>
 
       <section className="grid">
         <article className="card metric-card">
@@ -1090,10 +1180,10 @@ export default function Workspace() {
         </section>
       )}
 
-      <section className="card section">
+      <section className="card section" id="review-inbox">
         <div className="section-heading">
           <div>
-            <h2>Candidate alerts</h2>
+            <h2>{currentOrg?.role === "reviewer" ? "Reviewer inbox" : "Candidate alerts"}</h2>
             <p className="muted">
               Evidence-backed signals awaiting or undergoing human review.
             </p>
@@ -1122,6 +1212,17 @@ export default function Workspace() {
                 </p>
 
                 <p className="muted">{a.explanation}</p>
+                <p className="muted">
+                  {a.uploaded_by ? `Submitted by ${a.uploaded_by}${a.uploader_email ? ` (${a.uploader_email})` : ""}` : "Uploader details unavailable for older records"}
+                  {a.upload_filename ? ` · ${a.upload_filename}` : ""}
+                </p>
+                {a.assigned_to_user_id ? <p className="muted">Assigned reviewer: {reviewers.find((person) => person.user_id === a.assigned_to_user_id)?.full_name ?? "Assigned"}</p> : <p className="muted">Unassigned review</p>}
+                {currentOrg?.role === "org_admin" && <label className="inline-field">Assign reviewer
+                  <select aria-label={`Assign reviewer for ${a.id}`} value={a.assigned_to_user_id ?? ""} onChange={(event) => assignAlert(a.id, event.target.value)} disabled={busy}>
+                    <option value="">Unassigned</option>
+                    {reviewers.map((person) => <option key={person.user_id} value={person.user_id}>{person.full_name} · {roleNames[person.role] ?? person.role}</option>)}
+                  </select>
+                </label>}
 
                 <button
                   className="button-secondary"
@@ -1393,6 +1494,18 @@ export default function Workspace() {
           </div>
         )}
       </section>
+
+      {(currentOrg?.role === "org_admin" || currentOrg?.role === "analyst") && <section className="card section">
+        <h2>{currentOrg.role === "org_admin" ? "Organization upload activity" : "My upload history"}</h2>
+        <p className="muted">{currentOrg.role === "org_admin" ? "Every recorded dataset import in this organization, including who submitted it and the outcome." : "Your recent dataset imports and processing outcomes."}</p>
+        {uploadActivity.length === 0 ? <p className="muted">No recorded uploads yet.</p> : <div className="table-wrap"><table>
+          <thead><tr><th>Dataset</th><th>Uploaded by</th><th>Time</th><th>Accepted</th><th>Duplicates</th><th>Rejected</th><th>Alerts</th></tr></thead>
+          <tbody>{uploadActivity.map((item) => <tr key={item.id}>
+            <td>{item.filename}</td><td>{item.uploaded_by}<small>{item.uploader_email}</small></td>
+            <td>{new Date(item.created_at).toLocaleString()}</td><td>{item.accepted}</td><td>{item.duplicates}</td><td>{item.rejected}</td><td>{item.alerts_created}</td>
+          </tr>)}</tbody>
+        </table></div>}
+      </section>}
 
       <section className="card section">
         <h2>Recent observations</h2>
