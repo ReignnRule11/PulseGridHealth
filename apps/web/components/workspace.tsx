@@ -22,6 +22,20 @@ type Me = {
   session_expires_at: string;
 };
 
+type AccessMember = {
+  user_id: string; membership_id: string; full_name: string; email: string;
+  role: "org_admin" | "analyst" | "reviewer" | "viewer";
+  is_active: boolean; account_active: boolean; joined_at: string; account_created_at: string;
+};
+type AccessInvitation = {
+  id: string; email: string; role: string; created_at: string; expires_at: string;
+  accepted_at: string | null; status: "pending" | "accepted" | "expired";
+};
+type AccessAudit = {
+  id: string; actor_user_id: string; target_user_id: string | null; action: string;
+  before: Record<string, unknown>; after: Record<string, unknown>; created_at: string;
+};
+
 type AlertItem = {
   id: string;
   domain: string;
@@ -130,6 +144,12 @@ export default function Workspace() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("analyst");
   const [inviteToken, setInviteToken] = useState("");
+  const [accessMembers, setAccessMembers] = useState<AccessMember[]>([]);
+  const [accessInvitations, setAccessInvitations] = useState<AccessInvitation[]>([]);
+  const [accessAudit, setAccessAudit] = useState<AccessAudit[]>([]);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [memberRoleDrafts, setMemberRoleDrafts] = useState<Record<string, string>>({});
+
   const [inviteInput, setInviteInput] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
@@ -224,6 +244,36 @@ export default function Workspace() {
     [orgId, csrf]
   );
 
+  const loadOrganizationAccess = useCallback(async () => {
+    if (!orgId || me?.organizations.find((organization) => organization.id === orgId)?.role !== "org_admin") return;
+    setAccessLoading(true);
+    try {
+      const response = await apiFetch(`/api/v1/auth/organizations/${orgId}/access`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Unable to load organization access records.");
+      setAccessMembers((data.members ?? []) as AccessMember[]);
+      setAccessInvitations((data.invitations ?? []) as AccessInvitation[]);
+      setAccessAudit((data.audit ?? []) as AccessAudit[]);
+      setMemberRoleDrafts(Object.fromEntries((data.members ?? []).map((member: AccessMember) => [member.user_id, member.role])));
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Unable to load organization access records.");
+    } finally { setAccessLoading(false); }
+  }, [orgId, me, apiFetch]);
+
+  async function updateMember(userId: string, patch: { role?: string; is_active?: boolean }) {
+    setBusy(true); setMessage("");
+    try {
+      const response = await apiFetch(`/api/v1/auth/organizations/${orgId}/members/${userId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail ?? "Member update failed.");
+      await loadOrganizationAccess();
+      setMessage("Organization membership updated and recorded.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Member update failed."); }
+    finally { setBusy(false); }
+  }
+
   const loadWorkspace = useCallback(async () => {
     if (!me || !orgId) return;
 
@@ -279,6 +329,10 @@ export default function Workspace() {
     if (me && pathname === "/settings") router.replace("/settings/profile");
     if (me && pathname === "/login") router.replace("/workspace");
   }, [identityLoading, me, pathname, router]);
+
+  useEffect(() => {
+    if (pathname === "/organization/access" && me && orgId && me.organizations.find((organization) => organization.id === orgId)?.role === "org_admin") loadOrganizationAccess();
+  }, [pathname, me, orgId, loadOrganizationAccess]);
 
   useEffect(() => {
     if (me && orgId) loadWorkspace();
@@ -533,6 +587,7 @@ export default function Workspace() {
 
       setInviteToken(d.invitation_token);
       setInviteEmail("");
+      await loadOrganizationAccess();
 
       setMessage(
         "Invitation created. Deliver the token to the intended recipient through a secure channel; email delivery is not configured."
@@ -862,69 +917,44 @@ export default function Workspace() {
 
   if (pathname === "/organization/access") {
     if (!me || currentOrg?.role !== "org_admin") return <main className="auth-shell"><p className="muted">Organization administrator access is required.</p><Link href="/workspace">Return to workspace</Link></main>;
+    const formatDate = (value: string) => new Date(value).toLocaleString();
     return (
       <main>
-        <header className="app-header"><div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Organization access</h1><p className="muted">Invite colleagues and assign the minimum role they need.</p></div><div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div></header>
+        <header className="app-header"><div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Organization access</h1><p className="muted">Manage accepted members, assigned roles and invitation history.</p></div><div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div></header>
         <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings/profile">Personal settings</Link><Link href="/organization/access" aria-current="page">Organization access</Link></nav>
-              {currentOrg?.role === "org_admin" && (
         <section className="card section">
-          <h2>Organization access</h2>
-          <p className="muted">
-            Invite a colleague with the minimum role needed. The invitation
-            token is displayed once and must be delivered securely.
-          </p>
-
+          <h2>Invite a colleague</h2><p className="muted">Assign the minimum role needed. Invitation tokens are displayed once for secure manual delivery.</p>
           <form className="invite-form" onSubmit={createInvite}>
-            <label>
-              Colleague email
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </label>
-
-            <label>
-              Role
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-              >
-                <option value="analyst">
-                  Analyst — ingest data and run detection
-                </option>
-                <option value="reviewer">
-                  Reviewer — investigate and resolve alerts
-                </option>
-                <option value="viewer">
-                  Viewer — read-only access
-                </option>
-                <option value="org_admin">
-                  Organization administrator
-                </option>
-              </select>
-            </label>
-
-            <button disabled={busy}>Create invitation</button>
+            <label>Colleague email<input type="email" required value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} /></label>
+            <label>Role<select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
+              <option value="analyst">Analyst — ingest data and run detection</option><option value="reviewer">Reviewer — investigate and resolve alerts</option><option value="viewer">Viewer — read-only access</option><option value="org_admin">Organization administrator</option>
+            </select></label><button disabled={busy}>Create invitation</button>
           </form>
-
-          {inviteToken && (
-            <div className="token-panel">
-              <strong>One-time invitation token</strong>
-              <code>{inviteToken}</code>
-              <button
-                className="button-secondary"
-                onClick={() =>
-                  navigator.clipboard?.writeText(inviteToken)
-                }
-              >
-                Copy token
-              </button>
-            </div>
+          {inviteToken && <div className="token-panel"><strong>One-time invitation token</strong><code>{inviteToken}</code><button className="button-secondary" onClick={() => navigator.clipboard?.writeText(inviteToken)}>Copy token</button></div>}
+        </section>
+        <section className="card section">
+          <div className="section-heading"><div><h2>Organization members</h2><p className="muted">Accepted accounts and their current organization roles. Deactivated memberships remain visible.</p></div><button className="button-secondary" onClick={loadOrganizationAccess} disabled={accessLoading}>{accessLoading ? "Refreshing…" : "Refresh records"}</button></div>
+          {accessLoading ? <p className="muted">Loading organization records…</p> : accessMembers.length === 0 ? <p className="muted">No members found for this organization.</p> : (
+            <div className="table-wrap"><table><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Membership</th><th>Joined</th><th>Actions</th></tr></thead><tbody>
+              {accessMembers.map((member) => <tr key={member.user_id}>
+                <td><strong>{member.full_name}</strong>{member.user_id === me.id ? <small> You</small> : null}</td><td>{member.email}</td>
+                <td>{member.user_id === me.id ? roleNames[member.role] : <select aria-label={`Role for ${member.email}`} value={memberRoleDrafts[member.user_id] ?? member.role} onChange={(e) => setMemberRoleDrafts((current) => ({ ...current, [member.user_id]: e.target.value }))}><option value="org_admin">Organization administrator</option><option value="analyst">Analyst</option><option value="reviewer">Reviewer</option><option value="viewer">Read-only viewer</option></select>}</td>
+                <td>{member.is_active && member.account_active ? "Active" : "Deactivated"}</td><td>{formatDate(member.joined_at)}</td>
+                <td>{member.user_id === me.id ? <span className="muted">Current administrator</span> : <div className="member-actions"><button className="button-secondary" disabled={busy || (memberRoleDrafts[member.user_id] ?? member.role) === member.role} onClick={() => updateMember(member.user_id, { role: memberRoleDrafts[member.user_id] ?? member.role })}>Save role</button><button className="button-secondary" disabled={busy || !member.account_active} onClick={() => updateMember(member.user_id, { is_active: !member.is_active })}>{member.is_active ? "Deactivate" : "Reactivate"}</button></div>}</td>
+              </tr>)}
+            </tbody></table></div>
           )}
         </section>
-      )}
+        <section className="card section"><h2>Invitation history</h2><p className="muted">Pending, expired and accepted invitation records.</p>
+          {accessInvitations.length === 0 ? <p className="muted">No invitations have been issued yet.</p> : <div className="table-wrap"><table><thead><tr><th>Email</th><th>Assigned role</th><th>Status</th><th>Invited</th><th>Expires</th><th>Accepted</th></tr></thead><tbody>
+            {accessInvitations.map((invitation) => <tr key={invitation.id}><td>{invitation.email}</td><td>{roleNames[invitation.role] ?? invitation.role}</td><td>{invitation.status}</td><td>{formatDate(invitation.created_at)}</td><td>{formatDate(invitation.expires_at)}</td><td>{invitation.accepted_at ? formatDate(invitation.accepted_at) : "—"}</td></tr>)}
+          </tbody></table></div>}
+        </section>
+        <section className="card section"><h2>Access change history</h2><p className="muted">Latest 100 role and membership-status changes.</p>
+          {accessAudit.length === 0 ? <p className="muted">No access changes recorded yet.</p> : <div className="table-wrap"><table><thead><tr><th>Action</th><th>Previous state</th><th>New state</th><th>Recorded</th></tr></thead><tbody>
+            {accessAudit.map((entry) => <tr key={entry.id}><td>{entry.action.replaceAll("_", " ")}</td><td>{JSON.stringify(entry.before)}</td><td>{JSON.stringify(entry.after)}</td><td>{formatDate(entry.created_at)}</td></tr>)}
+          </tbody></table></div>}
+        </section>
         {message && <p className="status-message" role="status">{message}</p>}
       </main>
     );

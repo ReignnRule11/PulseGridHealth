@@ -159,6 +159,18 @@ class OrganizationMembership(Base):
     )
 
 
+class OrganizationAccessAudit(Base):
+    __tablename__ = "organization_access_audit"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    actor_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    before_state: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    after_state: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

@@ -166,3 +166,18 @@ th { color:#718096; font-weight:700; }
   .settings-panel { padding: 18px; }
   .settings-form button { width: 100%; }
 }
+
+
+/* Organization member administration */
+.member-actions { display:flex; flex-wrap:wrap; gap:7px; min-width:170px; }
+.member-actions button { white-space:nowrap; padding:8px 10px; font-size:12px; }
+.status-pill { display:inline-flex; align-items:center; border-radius:999px; padding:5px 9px; background:#fff4e5; color:#8a5200; font-size:12px; font-weight:650; }
+.status-pill.status-active { background:#eaf7ef; color:#17683b; }
+.section-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.section-heading > div { min-width:0; }
+.section-heading .muted { margin-top:5px; }
+.table-wrap td select { min-width:145px; max-width:220px; padding:8px; }
+@media (max-width: 760px) {
+  .section-heading { flex-direction:column; }
+  .member-actions { min-width:0; }
+}
