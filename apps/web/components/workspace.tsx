@@ -637,44 +637,7 @@ export default function Workspace() {
             An explainable early-warning workspace for authorized health
             teams.
           </p>
-          <section className="card section">
-        <h2>Account settings</h2>
-        <div className="auth-grid">
-          <form className="stack" onSubmit={saveProfile}>
-            <h3>Personal information</h3>
-            <label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label>
-            <button disabled={busy}>Save name</button>
-          </form>
-          <form className="stack" onSubmit={changePassword}>
-            <h3>Change password</h3>
-            <label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
-            <label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
-            <button disabled={busy}>Change password</button>
-          </form>
-          <form className="stack" onSubmit={requestEmailChange}>
-            <h3>Change email</h3>
-            <p className="muted">A verification token will be sent to the new address.</p>
-            <label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
-            <label>Confirm with current password<input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
-            <button className="button-secondary" disabled={busy}>Send verification</button>
-          </form>
-          <form className="stack" onSubmit={confirmEmailChange}>
-            <h3>Confirm new email</h3>
-            <label>Email verification token<input required value={emailToken} onChange={(e) => setEmailToken(e.target.value)} /></label>
-            <button disabled={busy}>Confirm email change</button>
-          </form>
-        </div>
-        {currentOrg?.role === "org_admin" && (
-          <form className="stack section" onSubmit={saveOrganization}>
-            <h3>Organization settings</h3>
-            <label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label>
-            <label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label>
-            <button disabled={busy}>Save organization details</button>
-          </form>
-        )}
-      </section>
-
-      <div className="notice">
+          <div className="notice">
             Signals are statistical candidates, not diagnoses or confirmed
             outbreaks. Human review is required. Use aggregate data only.
           </div>
@@ -711,6 +674,19 @@ export default function Workspace() {
               <button disabled={busy}>
                 {busy ? "Signing in…" : "Sign in securely"}
               </button>
+            </form>
+          </section>
+
+          <section className="card">
+            <h2>Forgot password</h2>
+            <form className="stack" onSubmit={requestPasswordReset}>
+              <label>Email<input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} /></label>
+              <button className="button-secondary" disabled={busy}>Send reset email</button>
+            </form>
+            <form className="stack" onSubmit={completePasswordReset}>
+              <label>Reset token<input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} /></label>
+              <label>New password<input type="password" minLength={12} required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} /></label>
+              <button disabled={busy}>Reset password</button>
             </form>
           </section>
 
@@ -831,6 +807,43 @@ export default function Workspace() {
           Refresh data
         </button>
       </div>
+
+      <section className="card section">
+        <h2>Account settings</h2>
+        <div className="auth-grid">
+          <form className="stack" onSubmit={saveProfile}>
+            <h3>Personal information</h3>
+            <label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label>
+            <button disabled={busy}>Save name</button>
+          </form>
+          <form className="stack" onSubmit={changePassword}>
+            <h3>Change password</h3>
+            <label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
+            <label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
+            <button disabled={busy}>Change password</button>
+          </form>
+          <form className="stack" onSubmit={requestEmailChange}>
+            <h3>Change email</h3>
+            <p className="muted">A verification token will be sent to the new address.</p>
+            <label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
+            <label>Confirm with current password<input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
+            <button className="button-secondary" disabled={busy}>Send verification</button>
+          </form>
+          <form className="stack" onSubmit={confirmEmailChange}>
+            <h3>Confirm new email</h3>
+            <label>Email verification token<input required value={emailToken} onChange={(e) => setEmailToken(e.target.value)} /></label>
+            <button disabled={busy}>Confirm email change</button>
+          </form>
+        </div>
+        {currentOrg?.role === "org_admin" && (
+          <form className="stack section" onSubmit={saveOrganization}>
+            <h3>Organization settings</h3>
+            <label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label>
+            <label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label>
+            <button disabled={busy}>Save organization details</button>
+          </form>
+        )}
+      </section>
 
       <div className="notice">
         Synthetic demonstration environment. Signals are not diagnoses,
