@@ -154,3 +154,15 @@ th { color:#718096; font-weight:700; }
  .landing-bottom { padding:22px; }
  .landing-footer { flex-direction:column; }
 }
+
+
+/* Focused account settings pages */
+.settings-panel { max-width: 760px; padding: 26px; }
+.settings-form { max-width: 560px; }
+.settings-form button { justify-self: start; min-width: 190px; }
+.settings-panel h2 { margin-bottom: 8px; }
+.settings-panel > .muted { max-width: 620px; }
+@media (max-width: 560px) {
+  .settings-panel { padding: 18px; }
+  .settings-form button { width: 100%; }
+}
