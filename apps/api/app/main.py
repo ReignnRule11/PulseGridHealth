@@ -190,11 +190,6 @@ async def import_observations(file: UploadFile = File(...),
     if file.content_type not in ("text/csv", "application/vnd.ms-excel", "application/octet-stream"):
         raise HTTPException(status_code=415, detail="csv_only")
     content = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
-    try:
-        rows, errors = parse_csv(content, settings.max_upload_mb * 1024 * 1024)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    accepted = duplicates = alerts_created = 0
     batch = None
     if context.get("actor_user_id"):
         batch = DataImportBatch(
@@ -204,6 +199,27 @@ async def import_observations(file: UploadFile = File(...),
         )
         db.add(batch)
         db.flush()
+    try:
+        rows, errors = parse_csv(content, settings.max_upload_mb * 1024 * 1024)
+    except ValueError as exc:
+        if batch:
+            batch.status = "rejected"
+            admins = db.execute(select(OrganizationMembership.user_id).where(
+                OrganizationMembership.organization_id == org_id,
+                OrganizationMembership.is_active.is_(True),
+                OrganizationMembership.role == "org_admin",
+                OrganizationMembership.user_id != context["actor_user_id"],
+            )).scalars().all()
+            for recipient_id in admins:
+                db.add(Notification(
+                    organization_id=org_id, recipient_user_id=recipient_id,
+                    kind="upload_rejected", title="Dataset upload was rejected",
+                    message=f"{context['actor']} attempted to upload {file.filename or 'a dataset'}, but validation failed: {str(exc)}."[:500],
+                    related_type="import_batch", related_id=batch.id,
+                ))
+            db.commit()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    accepted = duplicates = alerts_created = 0
     cohort_hints = {}
     for item in rows:
         if item.domain == "workforce" and item.denominator is not None:
@@ -270,7 +286,8 @@ async def import_observations(file: UploadFile = File(...),
                 message = (f"{context['actor']} uploaded {file.filename or 'a dataset'}; "
                            f"{alerts_created} candidate alert(s) were created." if kind == "review_queue"
                            else f"{context['actor']} uploaded {file.filename or 'a dataset'}: "
-                           f"{accepted} accepted, {duplicates} duplicates, {len(errors)} rejected.")
+                           f"{accepted} accepted, {duplicates} duplicates, {len(errors)} rejected, "
+                           f"{alerts_created} candidate alert(s) created.")
                 db.add(Notification(
                     organization_id=org_id, recipient_user_id=recipient_id,
                     kind=kind, title=title, message=message[:500],
