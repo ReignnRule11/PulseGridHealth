@@ -141,7 +141,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(page.getByRole("heading", { name: "Organization access" })).toHaveCount(0);
   await page.getByRole("link", { name: "Personal settings" }).click();
   await expect(page).toHaveURL(/\/settings\/profile$/);
-  await expect(page.getByRole("heading", { name: "Personal information" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Personal information", level: 1 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Change password" })).toHaveCount(0);
   await page.getByRole("link", { name: "Security", exact: true }).click();
   await expect(page).toHaveURL(/\/settings\/security$/);
