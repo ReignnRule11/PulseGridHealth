@@ -501,7 +501,7 @@ def get_request_tenant(
     if db.bind and db.bind.dialect.name == "postgresql":
         db.execute(text("SELECT set_config('app.organization_id', :organization_id, true)"),
                    {"organization_id": str(organization_id)})
-    return {"organization_id": organization_id, "role": role, "actor": actor, "is_demo": is_demo, "csrf_hash": auth_session.csrf_hash if raw else None}
+    return {"organization_id": organization_id, "role": role, "actor": actor, "actor_user_id": user.id if raw else None, "membership": membership if raw else None, "is_demo": is_demo, "csrf_hash": auth_session.csrf_hash if raw else None}
 
 
 def enforce_roles(context: dict, *allowed: str):
