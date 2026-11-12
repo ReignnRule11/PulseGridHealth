@@ -1,6 +1,8 @@
 
 "use client";
 
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const API = "";
@@ -113,6 +115,9 @@ const roleNames: Record<string, string> = {
 };
 
 export default function Workspace() {
+  const pathname = usePathname() ?? "/";
+  const router = useRouter();
+  const [identityLoading, setIdentityLoading] = useState(true);
   const [csrf, setCsrf] = useState("");
   const [me, setMe] = useState<Me | null>(null);
   const [orgId, setOrgId] = useState("");
@@ -172,6 +177,7 @@ export default function Workspace() {
     if (!r.ok) {
       setMe(null);
       setOrgId("");
+      setIdentityLoading(false);
       return;
     }
 
@@ -182,6 +188,7 @@ export default function Workspace() {
         ? current
         : (d.organizations[0]?.id ?? "")
     );
+    setIdentityLoading(false);
   }, []);
 
   const apiFetch = useCallback(
@@ -249,18 +256,27 @@ export default function Workspace() {
   useEffect(() => {
     requestCsrf()
       .then(loadIdentity)
-      .catch((e) =>
-        setMessage(e instanceof Error ? e.message : "Connection failed")
-      );
+      .catch((e) => {
+        setIdentityLoading(false);
+        setMessage(e instanceof Error ? e.message : "Connection failed");
+      });
 
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("invite");
-
+    const token = params.get("token") ?? params.get("invite");
     if (token) {
-      setInviteInput(token);
+      if (pathname === "/invite") setInviteInput(token);
+      if (pathname === "/reset-password") setResetToken(token);
+      if (pathname === "/verify-email-change") setEmailToken(token);
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [requestCsrf, loadIdentity]);
+  }, [requestCsrf, loadIdentity, pathname]);
+
+  useEffect(() => {
+    if (identityLoading) return;
+    const protectedPaths = ["/workspace", "/settings", "/organization/access", "/verify-email-change"];
+    if (protectedPaths.includes(pathname) && !me) router.replace("/login");
+    if (me && pathname === "/login") router.replace("/workspace");
+  }, [identityLoading, me, pathname, router]);
 
   useEffect(() => {
     if (me && orgId) loadWorkspace();
@@ -390,6 +406,7 @@ export default function Workspace() {
       setPassword("");
       await requestCsrf();
       await loadIdentity();
+      router.replace("/workspace");
 
       setMessage(
         "Signed in. Choose an authorized organization if you belong to more than one."
@@ -423,6 +440,7 @@ export default function Workspace() {
       setCsrf("");
 
       await requestCsrf();
+      router.replace("/login");
       setMessage("You have signed out.");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Sign-out failed");
@@ -636,132 +654,193 @@ export default function Workspace() {
     }
   }
 
-  if (!me) {
+  if (pathname === "/") {
     return (
-      <main className="auth-shell">
-        <section className="brand-block">
-          <div className="brand-mark">P</div>
-          <p className="eyebrow">
-            POPULATION &amp; WORKFORCE HEALTH INTELLIGENCE
-          </p>
-          <h1>PulseGrid Health</h1>
-          <p className="muted">
-            An explainable early-warning workspace for authorized health
-            teams.
-          </p>
-          <div className="notice">
-            Signals are statistical candidates, not diagnoses or confirmed
-            outbreaks. Human review is required. Use aggregate data only.
+      <main className="landing-shell">
+        <header className="landing-header">
+          <Link href="/" className="landing-brand"><span className="brand-mark">P</span><span>PulseGrid Health</span></Link>
+          <nav aria-label="Main navigation">
+            <a href="#platform">Platform</a>
+            <a href="#how-it-works">How it works</a>
+            <Link className="button-secondary" href={me ? "/workspace" : "/login"}>{me ? "Open workspace" : "Sign in"}</Link>
+          </nav>
+        </header>
+        <section className="landing-hero">
+          <div className="landing-copy">
+            <p className="eyebrow">POPULATION &amp; WORKFORCE HEALTH INTELLIGENCE</p>
+            <h1>See emerging health signals. Make better-informed decisions.</h1>
+            <p className="landing-lede">PulseGrid Health helps authorized public-health and workforce teams organize aggregate observations, identify unusual patterns, and coordinate evidence-led human review.</p>
+            <div className="landing-actions">
+              <Link className="landing-primary" href={me ? "/workspace" : "/login"}>{me ? "Go to workspace" : "Sign in to PulseGrid"} <span aria-hidden="true">→</span></Link>
+              <a className="landing-secondary" href="#platform">Explore the platform</a>
+            </div>
+            <p className="landing-footnote">Access is organization-based. New users join through an invitation from an organization administrator.</p>
+          </div>
+          <div className="landing-visual" aria-label="Illustration of connected health intelligence signals">
+            <div className="visual-orbit orbit-one"></div><div className="visual-orbit orbit-two"></div>
+            <div className="visual-core"><span className="visual-pulse"></span><strong>PulseGrid</strong><small>HEALTH INTELLIGENCE</small></div>
+            <div className="visual-node node-one"><span>Community</span><strong>Signals</strong></div>
+            <div className="visual-node node-two"><span>Workforce</span><strong>Trends</strong></div>
+            <div className="visual-node node-three"><span>Human</span><strong>Review</strong></div>
           </div>
         </section>
-
-        <div className="auth-grid">
-          <section className="card">
-            <h2>Sign in</h2>
-            <p className="muted">Use your organization account.</p>
-
-            <form className="stack" onSubmit={signIn}>
-              <label>
-                Email
-                <input
-                  type="email"
-                  autoComplete="username"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-
-              <label>
-                Password
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
-
-              <button disabled={busy}>
-                {busy ? "Signing in…" : "Sign in securely"}
-              </button>
-            </form>
-          </section>
-
-          <section className="card">
-            <h2>Forgot password</h2>
-            <form className="stack" onSubmit={requestPasswordReset}>
-              <label>Email<input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} /></label>
-              <button className="button-secondary" disabled={busy}>Send reset email</button>
-            </form>
-            <form className="stack" onSubmit={completePasswordReset}>
-              <label>Reset token<input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} /></label>
-              <label>New password<input type="password" minLength={12} required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} /></label>
-              <button disabled={busy}>Reset password</button>
-            </form>
-          </section>
-
-          <section className="card">
-            <h2>Accept an invitation</h2>
-            <p className="muted">
-              Enter the single-use invitation token provided by your
-              organization administrator.
-            </p>
-
-            <form className="stack" onSubmit={acceptInvite}>
-              <label>
-                Invitation token
-                <input
-                  required
-                  value={inviteInput}
-                  onChange={(e) => setInviteInput(e.target.value)}
-                />
-              </label>
-
-              <label>
-                Full name
-                <input
-                  required
-                  minLength={2}
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                />
-              </label>
-
-              <label>
-                Create password
-                <input
-                  type="password"
-                  required
-                  minLength={12}
-                  autoComplete="new-password"
-                  value={invitePassword}
-                  onChange={(e) => setInvitePassword(e.target.value)}
-                />
-              </label>
-
-              <button className="button-secondary" disabled={busy}>
-                Accept invitation
-              </button>
-            </form>
-          </section>
-        </div>
-
-        {message && (
-          <p className="status-message" role="status">
-            {message}
-          </p>
-        )}
-
-        <p className="footnote">
-          First organization setup is performed by an administrator using
-          the protected bootstrap API. No public self-registration is
-          available.
-        </p>
+        <section className="landing-trust">
+          <span>AGGREGATE DATA</span><span>EXPLAINABLE SIGNALS</span><span>HUMAN-LED REVIEW</span><span>ORGANIZATION ACCESS</span>
+        </section>
+        <section id="platform" className="landing-section">
+          <p className="eyebrow">THE PLATFORM</p>
+          <h2>From observations to informed action</h2>
+          <p className="muted landing-section-intro">A structured workspace for teams that need to review population and workforce health indicators responsibly.</p>
+          <div className="landing-features">
+            <article><span className="feature-number">01</span><h3>Bring data together</h3><p>Import authorized aggregate observations and view recent data in one organization workspace.</p></article>
+            <article><span className="feature-number">02</span><h3>Identify candidate signals</h3><p>Review statistical deviations with quantitative context, baselines, and data-quality caveats.</p></article>
+            <article><span className="feature-number">03</span><h3>Coordinate human review</h3><p>Assign review responsibilities, record findings, and retain an auditable history of decisions.</p></article>
+          </div>
+        </section>
+        <section id="how-it-works" className="landing-bottom">
+          <div><p className="eyebrow">BUILT FOR RESPONSIBLE USE</p><h2>Decision support, with people in control.</h2><p>Signals are statistical candidates—not diagnoses, confirmed outbreaks, or clinical predictions. Human review is required. PulseGrid Health is designed for aggregate data; do not upload identifiable patient or employee records.</p></div>
+          <Link className="landing-primary" href={me ? "/workspace" : "/login"}>{me ? "Open your workspace" : "Access your workspace"} <span aria-hidden="true">→</span></Link>
+        </section>
+        <footer className="landing-footer"><span>© {new Date().getFullYear()} PulseGrid Health</span><span>Population &amp; workforce health intelligence</span><Link href="/invite">Have an invitation?</Link></footer>
       </main>
     );
   }
+
+  if (pathname === "/login") {
+    return (
+      <main className="auth-shell auth-single">
+        <section className="auth-brand">
+          <Link href="/" className="back-link">← PulseGrid Health</Link>
+          <p className="eyebrow">SECURE ORGANIZATION ACCESS</p>
+          <h1>Welcome back</h1>
+          <p className="muted">Sign in to continue to your organization's health intelligence workspace.</p>
+        </section>
+        <section className="card auth-card">
+          <h2>Sign in</h2>
+          <form className="stack" onSubmit={signIn}>
+            <label>Email<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+            <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+            <button disabled={busy}>{busy ? "Signing in…" : "Sign in securely"}</button>
+          </form>
+          <div className="auth-links"><Link href="/forgot-password">Forgot your password?</Link><Link href="/invite">Accept an invitation</Link></div>
+          {message && <p className="status-message" role="status">{message}</p>}
+        </section>
+        <p className="footnote auth-footnote">No public self-registration. Access is provided by an organization administrator.</p>
+      </main>
+    );
+  }
+
+  if (pathname === "/forgot-password") {
+    return (
+      <main className="auth-shell auth-single">
+        <section className="auth-brand"><Link href="/login" className="back-link">← Back to sign in</Link><p className="eyebrow">ACCOUNT RECOVERY</p><h1>Reset your password</h1><p className="muted">Enter the email address associated with your PulseGrid Health account. If the account exists, we will send a one-time reset token.</p></section>
+        <section className="card auth-card">
+          <h2>Request a reset token</h2>
+          <form className="stack" onSubmit={requestPasswordReset}>
+            <label>Email<input type="email" autoComplete="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} /></label>
+            <button disabled={busy}>{busy ? "Sending…" : "Send reset instructions"}</button>
+          </form>
+          {message && <p className="status-message" role="status">{message}</p>}
+          <div className="auth-links"><Link href="/reset-password">I already have a reset token</Link></div>
+        </section>
+      </main>
+    );
+  }
+
+  if (pathname === "/reset-password") {
+    return (
+      <main className="auth-shell auth-single">
+        <section className="auth-brand"><Link href="/login" className="back-link">← Back to sign in</Link><p className="eyebrow">ACCOUNT RECOVERY</p><h1>Choose a new password</h1><p className="muted">Paste the one-time token from your password-reset email and choose a new password.</p></section>
+        <section className="card auth-card">
+          <h2>Complete password reset</h2>
+          <form className="stack" onSubmit={completePasswordReset}>
+            <label>Reset token<input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} /></label>
+            <label>New password<input type="password" minLength={12} autoComplete="new-password" required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} /></label>
+            <button disabled={busy}>{busy ? "Resetting…" : "Reset password"}</button>
+          </form>
+          {message && <p className="status-message" role="status">{message}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  if (pathname === "/invite") {
+    return (
+      <main className="auth-shell auth-single">
+        <section className="auth-brand"><Link href="/login" className="back-link">← Back to sign in</Link><p className="eyebrow">ORGANIZATION INVITATION</p><h1>Join your organization</h1><p className="muted">Use the single-use invitation token provided by your PulseGrid Health organization administrator.</p></section>
+        <section className="card auth-card">
+          <h2>Accept invitation</h2>
+          <form className="stack" onSubmit={acceptInvite}>
+            <label>Invitation token<input required value={inviteInput} onChange={(e) => setInviteInput(e.target.value)} /></label>
+            <label>Full name<input required minLength={2} autoComplete="name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} /></label>
+            <label>Create password<input type="password" required minLength={12} autoComplete="new-password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} /></label>
+            <button disabled={busy}>{busy ? "Accepting…" : "Accept invitation"}</button>
+          </form>
+          {message && <p className="status-message" role="status">{message}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  if (pathname === "/verify-email-change") {
+    if (identityLoading || !me) return <main className="auth-shell"><p className="muted">Checking your account session…</p></main>;
+    return (
+      <main className="auth-shell auth-single">
+        <section className="auth-brand"><Link href="/settings" className="back-link">← Account settings</Link><p className="eyebrow">EMAIL VERIFICATION</p><h1>Confirm your new email</h1><p className="muted">Enter the one-time verification token sent to your new email address. You must be signed in to the account that requested the change.</p></section>
+        <section className="card auth-card">
+          <h2>Confirm email change</h2>
+          <form className="stack" onSubmit={confirmEmailChange}>
+            <label>Email verification token<input required value={emailToken} onChange={(e) => setEmailToken(e.target.value)} /></label>
+            <button disabled={busy}>{busy ? "Confirming…" : "Confirm new email"}</button>
+          </form>
+          {message && <p className="status-message" role="status">{message}</p>}
+        </section>
+      </main>
+    );
+  }
+
+  if (identityLoading && ["/workspace", "/settings", "/organization/access"].includes(pathname)) {
+    return <main className="auth-shell"><p className="muted">Loading your secure workspace…</p></main>;
+  }
+
+  if (pathname === "/settings") {
+    if (!me) return null;
+    return (
+      <main>
+        <header className="app-header">
+          <div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Account settings</h1><p className="muted">Manage your personal account and organization details.</p></div>
+          <div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div>
+        </header>
+        <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings" aria-current="page">Account settings</Link>{currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}</nav>
+        <section className="card section">
+          <h2>Personal account</h2>
+          <p className="muted">These controls are available only to you while signed in.</p>
+          <div className="auth-grid">
+            <form className="stack" onSubmit={saveProfile}><h3>Personal information</h3><label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save name</button></form>
+            <form className="stack" onSubmit={changePassword}><h3>Change password</h3><label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label><label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label><button disabled={busy}>Change password</button></form>
+            <form className="stack" onSubmit={requestEmailChange}><h3>Change email</h3><p className="muted">A verification token will be sent to the new address.</p><label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label><label>Confirm with current password<input type="password" required autoComplete="current-password" value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label><button className="button-secondary" disabled={busy}>Send verification</button></form>
+          </div>
+          <div className="auth-links"><Link href="/verify-email-change">I have an email verification token</Link></div>
+        </section>
+        {currentOrg?.role === "org_admin" && <section className="card section"><h2>Organization profile</h2><p className="muted">Changes here apply to the active organization, not your personal account.</p><form className="stack" onSubmit={saveOrganization}><label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label><label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label><button disabled={busy}>Save organization details</button></form></section>}
+        {message && <p className="status-message" role="status">{message}</p>}
+      </main>
+    );
+  }
+
+  if (pathname === "/organization/access") {
+    if (!me || currentOrg?.role !== "org_admin") return <main className="auth-shell"><p className="muted">Organization administrator access is required.</p><Link href="/workspace">Return to workspace</Link></main>;
+    return (
+      <main>
+        <header className="app-header"><div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Organization access</h1><p className="muted">Invite colleagues and assign the minimum role they need.</p></div><div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div></header>
+        <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings">Account settings</Link><Link href="/organization/access" aria-current="page">Organization access</Link></nav>
+        {orgBlock}
+        {message && <p className="status-message" role="status">{message}</p>}
+      </main>
+    );
+  }
+
+  if (!me) return null;
 
   return (
     <main>
@@ -789,6 +868,12 @@ export default function Workspace() {
           </button>
         </div>
       </header>
+
+      <nav className="workspace-nav" aria-label="Workspace navigation">
+        <Link href="/workspace" aria-current="page">Workspace</Link>
+        <Link href="/settings">Account settings</Link>
+        {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
+      </nav>
 
       <div className="workspace-bar">
         <label>
@@ -819,43 +904,6 @@ export default function Workspace() {
           Refresh data
         </button>
       </div>
-
-      <section className="card section">
-        <h2>Account settings</h2>
-        <div className="auth-grid">
-          <form className="stack" onSubmit={saveProfile}>
-            <h3>Personal information</h3>
-            <label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label>
-            <button disabled={busy}>Save name</button>
-          </form>
-          <form className="stack" onSubmit={changePassword}>
-            <h3>Change password</h3>
-            <label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
-            <label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
-            <button disabled={busy}>Change password</button>
-          </form>
-          <form className="stack" onSubmit={requestEmailChange}>
-            <h3>Change email</h3>
-            <p className="muted">A verification token will be sent to the new address.</p>
-            <label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
-            <label>Confirm with current password<input type="password" required value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label>
-            <button className="button-secondary" disabled={busy}>Send verification</button>
-          </form>
-          <form className="stack" onSubmit={confirmEmailChange}>
-            <h3>Confirm new email</h3>
-            <label>Email verification token<input required value={emailToken} onChange={(e) => setEmailToken(e.target.value)} /></label>
-            <button disabled={busy}>Confirm email change</button>
-          </form>
-        </div>
-        {currentOrg?.role === "org_admin" && (
-          <form className="stack section" onSubmit={saveOrganization}>
-            <h3>Organization settings</h3>
-            <label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label>
-            <label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label>
-            <button disabled={busy}>Save organization details</button>
-          </form>
-        )}
-      </section>
 
       <div className="notice">
         Synthetic demonstration environment. Signals are not diagnoses,
@@ -1260,66 +1308,6 @@ export default function Workspace() {
           </div>
         )}
       </section>
-
-      {currentOrg?.role === "org_admin" && (
-        <section className="card section">
-          <h2>Organization access</h2>
-          <p className="muted">
-            Invite a colleague with the minimum role needed. The invitation
-            token is displayed once and must be delivered securely.
-          </p>
-
-          <form className="invite-form" onSubmit={createInvite}>
-            <label>
-              Colleague email
-              <input
-                type="email"
-                required
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </label>
-
-            <label>
-              Role
-              <select
-                value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value)}
-              >
-                <option value="analyst">
-                  Analyst — ingest data and run detection
-                </option>
-                <option value="reviewer">
-                  Reviewer — investigate and resolve alerts
-                </option>
-                <option value="viewer">
-                  Viewer — read-only access
-                </option>
-                <option value="org_admin">
-                  Organization administrator
-                </option>
-              </select>
-            </label>
-
-            <button disabled={busy}>Create invitation</button>
-          </form>
-
-          {inviteToken && (
-            <div className="token-panel">
-              <strong>One-time invitation token</strong>
-              <code>{inviteToken}</code>
-              <button
-                className="button-secondary"
-                onClick={() =>
-                  navigator.clipboard?.writeText(inviteToken)
-                }
-              >
-                Copy token
-              </button>
-            </div>
-          )}
-        </section>
-      )}
 
       <footer className="footnote">
         Access is enforced by the API for every request. Interface controls
