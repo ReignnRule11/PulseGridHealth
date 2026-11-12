@@ -834,7 +834,65 @@ export default function Workspace() {
       <main>
         <header className="app-header"><div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Organization access</h1><p className="muted">Invite colleagues and assign the minimum role they need.</p></div><div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div></header>
         <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings">Account settings</Link><Link href="/organization/access" aria-current="page">Organization access</Link></nav>
-        {orgBlock}
+              {currentOrg?.role === "org_admin" && (
+        <section className="card section">
+          <h2>Organization access</h2>
+          <p className="muted">
+            Invite a colleague with the minimum role needed. The invitation
+            token is displayed once and must be delivered securely.
+          </p>
+
+          <form className="invite-form" onSubmit={createInvite}>
+            <label>
+              Colleague email
+              <input
+                type="email"
+                required
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
+            </label>
+
+            <label>
+              Role
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+              >
+                <option value="analyst">
+                  Analyst — ingest data and run detection
+                </option>
+                <option value="reviewer">
+                  Reviewer — investigate and resolve alerts
+                </option>
+                <option value="viewer">
+                  Viewer — read-only access
+                </option>
+                <option value="org_admin">
+                  Organization administrator
+                </option>
+              </select>
+            </label>
+
+            <button disabled={busy}>Create invitation</button>
+          </form>
+
+          {inviteToken && (
+            <div className="token-panel">
+              <strong>One-time invitation token</strong>
+              <code>{inviteToken}</code>
+              <button
+                className="button-secondary"
+                onClick={() =>
+                  navigator.clipboard?.writeText(inviteToken)
+                }
+              >
+                Copy token
+              </button>
+            </div>
+          )}
+        </section>
+      )}
         {message && <p className="status-message" role="status">{message}</p>}
       </main>
     );
