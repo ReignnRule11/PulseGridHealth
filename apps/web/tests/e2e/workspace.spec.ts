@@ -79,7 +79,7 @@ async function seedSecondOrganization(email: string, organizationName: string) {
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto("/");
-  await page.getByLabel("Email").fill(email);
+  await page.locator("section").filter({ hasText: "Sign inUse your organization" }).getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in securely" }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
