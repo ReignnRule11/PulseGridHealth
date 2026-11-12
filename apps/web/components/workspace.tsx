@@ -853,7 +853,7 @@ export default function Workspace() {
         </section>}
         {isOrganizationSettings && <section className="card section settings-panel">
           <h2>Organization profile</h2><p className="muted">These details apply to the active organization and are visible to its members.</p>
-          <form className="stack settings-form" onSubmit={saveOrganization}><label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label><label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label><button disabled={busy}>Save organization details</button></form>
+          <form className="stack settings-form" onSubmit={saveOrganization}><label>Organization name<input required minLength={2} value={orgName || currentOrg?.name || ""} onChange={(e) => setOrgName(e.target.value)} /></label><label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg?.organization_type || ""} onChange={(e) => setOrgType(e.target.value)} /></label><button disabled={busy}>Save organization details</button></form>
         </section>}
         {message && <p className="status-message" role="status">{message}</p>}
       </main>
