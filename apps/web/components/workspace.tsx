@@ -135,7 +135,7 @@ export default function Workspace() {
   const [histories, setHistories] = useState<Record<string, string>>({});
   const [historyBusy, setHistoryBusy] = useState("");
   const [aiInsights, setAiInsights] = useState<Record<string, AiInsight>>({});
-  const [aiBusy, setAiBusy] = useState("");\n  const [profileName, setProfileName] = useState("");\n  const [currentPassword, setCurrentPassword] = useState("");\n  const [newPassword, setNewPassword] = useState("");\n  const [newEmail, setNewEmail] = useState("");\n  const [emailToken, setEmailToken] = useState("");\n  const [orgName, setOrgName] = useState("");\n  const [orgType, setOrgType] = useState("");\n  const [forgotEmail, setForgotEmail] = useState("");\n  const [resetToken, setResetToken] = useState("");\n  const [resetPassword, setResetPassword] = useState("");
+  const [aiBusy, setAiBusy] = useState("");\n  const [profileName, setProfileName] = useState("");\n  const [currentPassword, setCurrentPassword] = useState("");\n  const [emailCurrentPassword, setEmailCurrentPassword] = useState("");\n  const [newPassword, setNewPassword] = useState("");\n  const [newEmail, setNewEmail] = useState("");\n  const [emailToken, setEmailToken] = useState("");\n  const [orgName, setOrgName] = useState("");\n  const [orgType, setOrgType] = useState("");\n  const [forgotEmail, setForgotEmail] = useState("");\n  const [resetToken, setResetToken] = useState("");\n  const [resetPassword, setResetPassword] = useState("");
 
   const requestCsrf = useCallback(async () => {
     const r = await fetch(`${API}/api/v1/auth/csrf`, {
