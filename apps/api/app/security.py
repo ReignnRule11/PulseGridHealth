@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.db import get_db
 from app.models import (
     AuthSession, Organization, OrganizationInvitation,
-    OrganizationMembership, User, AccountActionToken,
+    OrganizationMembership, OrganizationAccessAudit, User, AccountActionToken,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["identity and access"])
@@ -40,6 +40,11 @@ class LoginIn(BaseModel):
 class InviteIn(BaseModel):
     email: str = Field(min_length=5, max_length=254)
     role: str = Field(pattern="^(org_admin|analyst|reviewer|viewer)$")
+
+
+class OrganizationMemberUpdateIn(BaseModel):
+    role: str | None = Field(default=None, pattern="^(org_admin|analyst|reviewer|viewer)$")
+    is_active: bool | None = None
 
 
 class AcceptInviteIn(BaseModel):
@@ -286,6 +291,116 @@ def me(identity: dict = Depends(get_identity), db: Session = Depends(get_db)):
             organizations.append({"id": str(organization.id), "name": organization.name, "organization_type": organization.organization_type, "role": membership.role})
     return {"id": str(user.id), "email": user.email, "full_name": user.full_name,
             "organizations": organizations, "session_expires_at": identity["session"].expires_at.isoformat()}
+
+
+@router.get("/organizations/{organization_id}/access")
+def organization_access(organization_id: UUID,
+                        context: dict = Depends(require_roles("org_admin")),
+                        db: Session = Depends(get_db)):
+    if context["membership"].organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="organization_access_denied")
+
+    rows = db.execute(
+        select(OrganizationMembership, User)
+        .join(User, User.id == OrganizationMembership.user_id)
+        .where(OrganizationMembership.organization_id == organization_id)
+        .order_by(OrganizationMembership.created_at.asc(), User.email.asc())
+    ).all()
+    members = [{
+        "user_id": str(user.id),
+        "membership_id": str(membership.id),
+        "full_name": user.full_name,
+        "email": user.email,
+        "role": membership.role,
+        "is_active": membership.is_active,
+        "account_active": user.is_active,
+        "joined_at": _aware(membership.created_at).isoformat(),
+        "account_created_at": _aware(user.created_at).isoformat(),
+    } for membership, user in rows]
+
+    invitations = db.scalars(
+        select(OrganizationInvitation)
+        .where(OrganizationInvitation.organization_id == organization_id)
+        .order_by(OrganizationInvitation.created_at.desc())
+    ).all()
+    now = _now()
+    invitation_rows = [{
+        "id": str(invitation.id),
+        "email": invitation.email,
+        "role": invitation.role,
+        "created_at": _aware(invitation.created_at).isoformat(),
+        "expires_at": _aware(invitation.expires_at).isoformat(),
+        "accepted_at": _aware(invitation.accepted_at).isoformat() if invitation.accepted_at else None,
+        "status": "accepted" if invitation.accepted_at else ("expired" if _aware(invitation.expires_at) <= now else "pending"),
+    } for invitation in invitations]
+
+    audit_rows = db.scalars(
+        select(OrganizationAccessAudit)
+        .where(OrganizationAccessAudit.organization_id == organization_id)
+        .order_by(OrganizationAccessAudit.created_at.desc())
+        .limit(100)
+    ).all()
+    audit = [{
+        "id": str(item.id),
+        "actor_user_id": str(item.actor_user_id),
+        "target_user_id": str(item.target_user_id) if item.target_user_id else None,
+        "action": item.action,
+        "before": item.before_state,
+        "after": item.after_state,
+        "created_at": _aware(item.created_at).isoformat(),
+    } for item in audit_rows]
+    return {"members": members, "invitations": invitation_rows, "audit": audit}
+
+
+@router.patch("/organizations/{organization_id}/members/{user_id}")
+def update_organization_member(organization_id: UUID, user_id: UUID,
+                               payload: OrganizationMemberUpdateIn, request: Request,
+                               context: dict = Depends(require_roles("org_admin")),
+                               csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    _origin_ok(request)
+    actor = context["identity"]["user"]
+    if context["membership"].organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="organization_access_denied")
+    if payload.role is None and payload.is_active is None:
+        raise HTTPException(status_code=422, detail="member_update_required")
+    if actor.id == user_id:
+        raise HTTPException(status_code=409, detail="cannot_modify_own_membership")
+
+    membership = db.scalar(select(OrganizationMembership).where(
+        OrganizationMembership.organization_id == organization_id,
+        OrganizationMembership.user_id == user_id,
+    ).with_for_update())
+    if not membership:
+        raise HTTPException(status_code=404, detail="organization_member_not_found")
+
+    before = {"role": membership.role, "is_active": membership.is_active}
+    next_role = payload.role if payload.role is not None else membership.role
+    next_active = payload.is_active if payload.is_active is not None else membership.is_active
+
+    if membership.role == "org_admin" and membership.is_active and (next_role != "org_admin" or not next_active):
+        active_admins = db.scalar(select(__import__("sqlalchemy").func.count()).select_from(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.role == "org_admin",
+            OrganizationMembership.is_active.is_(True),
+        )) or 0
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="cannot_remove_last_organization_admin")
+
+    membership.role = next_role
+    membership.is_active = next_active
+    after = {"role": membership.role, "is_active": membership.is_active}
+    if before != after:
+        action = "member_role_changed" if before["role"] != after["role"] else "member_status_changed"
+        db.add(OrganizationAccessAudit(
+            organization_id=organization_id,
+            actor_user_id=actor.id,
+            target_user_id=user_id,
+            action=action,
+            before_state=before,
+            after_state=after,
+        ))
+        db.commit()
+    return {"user_id": str(user_id), **after}
 
 
 @router.post("/organizations/{organization_id}/invitations")
