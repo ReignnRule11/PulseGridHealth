@@ -3,7 +3,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0007_upload_activity_notifications"
+revision = "0007_upload_activity"
 down_revision = "0006_organization_access_audit"
 branch_labels = None
 depends_on = None
