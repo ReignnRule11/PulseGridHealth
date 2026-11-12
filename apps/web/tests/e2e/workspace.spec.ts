@@ -112,6 +112,12 @@ test("public, authentication and recovery screens have separate routes", async (
   await expect(page.getByRole("button", { name: "Sign in securely" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Forgot password" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Forgot your password?" })).toBeVisible();
+  const loginPassword = page.getByLabel("Password", { exact: true });
+  await expect(loginPassword).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(loginPassword).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(loginPassword).toHaveAttribute("type", "password");
 
   await page.goto("/forgot-password");
   await expect(page.getByRole("heading", { name: "Request a reset token" })).toBeVisible();
@@ -120,10 +126,22 @@ test("public, authentication and recovery screens have separate routes", async (
   await page.goto("/reset-password");
   await expect(page.getByRole("heading", { name: "Complete password reset" })).toBeVisible();
   await expect(page.getByLabel("Reset token")).toBeVisible();
+  const resetPassword = page.getByLabel("New password");
+  await expect(resetPassword).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(resetPassword).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(resetPassword).toHaveAttribute("type", "password");
 
   await page.goto("/invite");
   await expect(page.getByRole("heading", { name: "Accept invitation" })).toBeVisible();
   await expect(page.getByLabel("Invitation token")).toBeVisible();
+  const invitePassword = page.getByLabel("Create password");
+  await expect(invitePassword).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(invitePassword).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(invitePassword).toHaveAttribute("type", "password");
 });
 
 test("authenticated workspace enforces ingestion, review, role and tenant boundaries", async ({ page, browser }, testInfo) => {
