@@ -78,12 +78,12 @@ def _verify_password(password: str, encoded: str) -> bool:
         return False
 
 
-def _origin_ok(request: Request):
+def _origin_ok(request: Request, *, require_origin: bool = True):
     origin = request.headers.get("origin")
     allowed = {item.strip().rstrip("/") for item in settings.cors_origins.split(",") if item.strip()}
     if origin and origin.rstrip("/") not in allowed:
         raise HTTPException(status_code=403, detail="origin_not_allowed")
-    if settings.app_env.lower() == "production" and not origin:
+    if require_origin and settings.app_env.lower() == "production" and not origin:
         raise HTTPException(status_code=403, detail="origin_required")
 
 
@@ -156,7 +156,8 @@ def require_csrf(request: Request, identity: dict = Depends(get_identity)):
 
 @router.get("/csrf")
 def issue_csrf(response: Response, request: Request, db: Session = Depends(get_db)):
-    _origin_ok(request)
+    # Same-origin GET requests may omit Origin; unsafe requests still require it.
+    _origin_ok(request, require_origin=False)
     token = secrets.token_urlsafe(32)
     raw_session = request.cookies.get(SESSION_COOKIE)
     if raw_session:
