@@ -172,8 +172,9 @@ def test_primary_admin_is_the_only_account_that_can_hold_admin_role(client):
     assert primary["is_primary_admin"] is True
     assert member["is_primary_admin"] is False
     assert primary["role"] == "org_admin"
+    member_id = member["user_id"]
     promote = client.patch(
-        f"/api/v1/auth/organizations/{organization_id}/members/{member["user_id"]}",
+        f"/api/v1/auth/organizations/{organization_id}/members/{member_id}",
         headers={"X-Organization-ID": organization_id, "X-CSRF-Token": admin_csrf},
         json={"role": "org_admin"},
     )
