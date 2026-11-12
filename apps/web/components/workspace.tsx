@@ -8,7 +8,7 @@ const API = "";
 type Org = {
   id: string;
   name: string;
-  role: "org_admin" | "analyst" | "reviewer" | "viewer";
+  organization_type: string;\n  role: "org_admin" | "analyst" | "reviewer" | "viewer";
 };
 
 type Me = {
@@ -134,7 +134,7 @@ export default function Workspace() {
   const [histories, setHistories] = useState<Record<string, string>>({});
   const [historyBusy, setHistoryBusy] = useState("");
   const [aiInsights, setAiInsights] = useState<Record<string, AiInsight>>({});
-  const [aiBusy, setAiBusy] = useState("");
+  const [aiBusy, setAiBusy] = useState("");\n  const [profileName, setProfileName] = useState("");\n  const [currentPassword, setCurrentPassword] = useState("");\n  const [newPassword, setNewPassword] = useState("");\n  const [newEmail, setNewEmail] = useState("");\n  const [emailToken, setEmailToken] = useState("");\n  const [orgName, setOrgName] = useState("");\n  const [orgType, setOrgType] = useState("");\n  const [forgotEmail, setForgotEmail] = useState("");\n  const [resetToken, setResetToken] = useState("");\n  const [resetPassword, setResetPassword] = useState("");
 
   const requestCsrf = useCallback(async () => {
     const r = await fetch(`${API}/api/v1/auth/csrf`, {
@@ -264,6 +264,92 @@ export default function Workspace() {
 
   const canReview =
     currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer";
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/profile`, { method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ full_name: profileName.trim() }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Profile update failed");
+      await loadIdentity(); setMessage("Your name has been updated.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Profile update failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function changePassword(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/password/change`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password change failed");
+      setCurrentPassword(""); setNewPassword(""); setMessage("Password changed. Other active sessions were revoked.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password change failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestEmailChange(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/email/change/request`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ new_email: newEmail, current_password: currentPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Email verification request failed");
+      setMessage("Verification sent to the new address. Enter the one-time token below.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Email change failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmEmailChange(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/email/change/confirm`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ token: emailToken }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Email confirmation failed");
+      setEmailToken(""); await loadIdentity(); setMessage("Email address changed successfully.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Email confirmation failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function saveOrganization(event: FormEvent) {
+    event.preventDefault(); if (!orgId) return; setBusy(true); setMessage("");
+    try {
+      const r = await apiFetch(`/api/v1/auth/organizations/${orgId}`, { method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: orgName.trim(), organization_type: orgType.trim() }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Organization update failed");
+      await loadIdentity(); setMessage("Organization details updated.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Organization update failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestPasswordReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const token = csrf || await requestCsrf();
+      const r = await fetch(`${API}/api/v1/auth/password/forgot`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+        body: JSON.stringify({ email: forgotEmail }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password reset request failed");
+      setMessage("If that account exists, a password-reset email has been sent.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password reset request failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function completePasswordReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const token = csrf || await requestCsrf();
+      const r = await fetch(`${API}/api/v1/auth/password/reset`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+        body: JSON.stringify({ token: resetToken, new_password: resetPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password reset failed");
+      setResetToken(""); setResetPassword(""); setMessage("Password reset. You can now sign in.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password reset failed"); }
+    finally { setBusy(false); }
+  }
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
