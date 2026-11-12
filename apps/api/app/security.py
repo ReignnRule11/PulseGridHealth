@@ -39,7 +39,7 @@ class LoginIn(BaseModel):
 
 class InviteIn(BaseModel):
     email: str = Field(min_length=5, max_length=254)
-    role: str = Field(pattern="^(org_admin|analyst|reviewer|viewer)$")
+    role: str = Field(pattern="^(analyst|reviewer|viewer)$")
 
 
 class OrganizationMemberUpdateIn(BaseModel):
@@ -59,6 +59,13 @@ def _now():
 
 def _aware(value: datetime):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def _primary_admin_user_id(db: Session, organization_id: UUID):
+    """The bootstrap account is the first organization membership and remains the sole admin."""
+    return db.scalar(select(OrganizationMembership.user_id).where(
+        OrganizationMembership.organization_id == organization_id
+    ).order_by(OrganizationMembership.created_at.asc(), OrganizationMembership.id.asc()).limit(1))
 
 
 def _hash_token(value: str) -> str:
@@ -306,9 +313,11 @@ def organization_access(organization_id: UUID,
         .where(OrganizationMembership.organization_id == organization_id)
         .order_by(OrganizationMembership.created_at.asc(), User.email.asc())
     ).all()
+    primary_admin_id = _primary_admin_user_id(db, organization_id)
     members = [{
         "user_id": str(user.id),
         "membership_id": str(membership.id),
+        "is_primary_admin": user.id == primary_admin_id,
         "full_name": user.full_name,
         "email": user.email,
         "role": membership.role,
@@ -376,6 +385,11 @@ def update_organization_member(organization_id: UUID, user_id: UUID,
     before = {"role": membership.role, "is_active": membership.is_active}
     next_role = payload.role if payload.role is not None else membership.role
     next_active = payload.is_active if payload.is_active is not None else membership.is_active
+    primary_admin_id = _primary_admin_user_id(db, organization_id)
+    if next_role == "org_admin" and user_id != primary_admin_id:
+        raise HTTPException(status_code=403, detail="primary_admin_role_reserved")
+    if user_id == primary_admin_id and actor.id != primary_admin_id:
+        raise HTTPException(status_code=403, detail="primary_admin_account_protected")
 
     if membership.role == "org_admin" and membership.is_active and (next_role != "org_admin" or not next_active):
         active_admins = db.scalar(select(func.count()).select_from(OrganizationMembership).where(
@@ -444,6 +458,8 @@ def accept_invitation(payload: AcceptInviteIn, request: Request, db: Session = D
     ).with_for_update())
     if not invitation or invitation.accepted_at or _aware(invitation.expires_at) <= _now():
         raise HTTPException(status_code=400, detail="invitation_invalid_or_expired")
+    if invitation.role == "org_admin":
+        raise HTTPException(status_code=403, detail="organization_admin_invitations_disabled")
     if db.scalar(select(User.id).where(User.email == invitation.email)):
         raise HTTPException(status_code=409, detail="email_already_registered")
     user = User(email=invitation.email, full_name=payload.full_name.strip(),
