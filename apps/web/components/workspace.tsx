@@ -274,8 +274,9 @@ export default function Workspace() {
 
   useEffect(() => {
     if (identityLoading) return;
-    const protectedPaths = ["/workspace", "/settings", "/organization/access", "/verify-email-change"];
+    const protectedPaths = ["/workspace", "/settings", "/settings/profile", "/settings/security", "/settings/email", "/settings/organization", "/organization/access", "/verify-email-change"];
     if (protectedPaths.includes(pathname) && !me) router.replace("/login");
+    if (me && pathname === "/settings") router.replace("/settings/profile");
     if (me && pathname === "/login") router.replace("/workspace");
   }, [identityLoading, me, pathname, router]);
 
@@ -293,6 +294,16 @@ export default function Workspace() {
 
   const canReview =
     currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer";
+
+  const workspaceMode = currentOrg?.role ?? "viewer";
+  const workspaceHeading = workspaceMode === "org_admin" ? "Organization command center"
+    : workspaceMode === "analyst" ? "Data analysis workspace"
+    : workspaceMode === "reviewer" ? "Review workspace"
+    : "Read-only workspace";
+  const workspaceDescription = workspaceMode === "org_admin" ? "Organization-wide health intelligence, team access and operational oversight."
+    : workspaceMode === "analyst" ? "Import authorized aggregate observations, inspect trends and prepare evidence for review."
+    : workspaceMode === "reviewer" ? "Review candidate signals, document findings and track evidence-led decisions."
+    : "Explore approved organization observations, candidate signals and published review outcomes.";
 
   async function saveProfile(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -800,30 +811,50 @@ export default function Workspace() {
     );
   }
 
-  if (identityLoading && ["/workspace", "/settings", "/organization/access"].includes(pathname)) {
+  if (identityLoading && ["/workspace", "/settings", "/settings/profile", "/settings/security", "/settings/email", "/settings/organization", "/organization/access"].includes(pathname)) {
     return <main className="auth-shell"><p className="muted">Loading your secure workspace…</p></main>;
   }
 
-  if (pathname === "/settings") {
+  if (pathname.startsWith("/settings/")) {
     if (!me) return null;
+    const settingsPath = pathname;
+    const isOrganizationSettings = settingsPath === "/settings/organization";
+    if (isOrganizationSettings && currentOrg?.role !== "org_admin") {
+      return <main className="auth-shell"><p className="muted">Organization administrator access is required.</p><Link href="/settings/profile">Return to personal settings</Link></main>;
+    }
+    const settingsTitle = isOrganizationSettings ? "Organization profile" : settingsPath === "/settings/security" ? "Security" : settingsPath === "/settings/email" ? "Email address" : "Personal information";
+    const settingsDescription = isOrganizationSettings ? "Manage details shared across your organization." : settingsPath === "/settings/security" ? "Keep your account secure and manage your password." : settingsPath === "/settings/email" ? "Manage the email address used for your PulseGrid Health account." : "Manage the personal details associated with your account.";
     return (
       <main>
         <header className="app-header">
-          <div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Account settings</h1><p className="muted">Manage your personal account and organization details.</p></div>
+          <div><p className="eyebrow">PULSEGRID HEALTH · ACCOUNT</p><h1>{settingsTitle}</h1><p className="muted">{settingsDescription}</p></div>
           <div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div>
         </header>
-        <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings" aria-current="page">Account settings</Link>{currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}</nav>
-        <section className="card section">
-          <h2>Personal account</h2>
-          <p className="muted">These controls are available only to you while signed in.</p>
-          <div className="auth-grid">
-            <form className="stack" onSubmit={saveProfile}><h3>Personal information</h3><label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save name</button></form>
-            <form className="stack" onSubmit={changePassword}><h3>Change password</h3><label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label><label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label><button disabled={busy}>Change password</button></form>
-            <form className="stack" onSubmit={requestEmailChange}><h3>Change email</h3><p className="muted">A verification token will be sent to the new address.</p><label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label><label>Confirm with current password<input type="password" required autoComplete="current-password" value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label><button className="button-secondary" disabled={busy}>Send verification</button></form>
-          </div>
-          <div className="auth-links"><Link href="/verify-email-change">I have an email verification token</Link></div>
-        </section>
-        {currentOrg?.role === "org_admin" && <section className="card section"><h2>Organization profile</h2><p className="muted">Changes here apply to the active organization, not your personal account.</p><form className="stack" onSubmit={saveOrganization}><label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label><label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label><button disabled={busy}>Save organization details</button></form></section>}
+        <nav className="workspace-nav" aria-label="Account navigation">
+          <Link href="/workspace">Workspace</Link>
+          <Link href="/settings/profile" aria-current={settingsPath === "/settings/profile" ? "page" : undefined}>Personal information</Link>
+          <Link href="/settings/security" aria-current={settingsPath === "/settings/security" ? "page" : undefined}>Security</Link>
+          <Link href="/settings/email" aria-current={settingsPath === "/settings/email" ? "page" : undefined}>Email</Link>
+          {currentOrg?.role === "org_admin" && <Link href="/settings/organization" aria-current={isOrganizationSettings ? "page" : undefined}>Organization</Link>}
+          {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
+        </nav>
+        {settingsPath === "/settings/profile" && <section className="card section settings-panel">
+          <h2>Personal information</h2><p className="muted">Update the name displayed on your account. Additional profile fields can be added when supported by the account profile model.</p>
+          <form className="stack settings-form" onSubmit={saveProfile}><label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save personal information</button></form>
+        </section>}
+        {settingsPath === "/settings/security" && <section className="card section settings-panel">
+          <h2>Change password</h2><p className="muted">Use a strong password that you do not reuse on other services. Other active sessions are revoked after a successful change.</p>
+          <form className="stack settings-form" onSubmit={changePassword}><label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label><label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label><button disabled={busy}>Change password</button></form>
+        </section>}
+        {settingsPath === "/settings/email" && <section className="card section settings-panel">
+          <h2>Change email address</h2><p className="muted">A verification token will be sent to your new email address. Your current email remains active until verification is complete.</p>
+          <form className="stack settings-form" onSubmit={requestEmailChange}><label>New email address<input type="email" required autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label><label>Confirm with current password<input type="password" required autoComplete="current-password" value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label><button disabled={busy}>Send verification</button></form>
+          <div className="auth-links"><Link href="/verify-email-change">I already have a verification token</Link></div>
+        </section>}
+        {isOrganizationSettings && <section className="card section settings-panel">
+          <h2>Organization profile</h2><p className="muted">These details apply to the active organization and are visible to its members.</p>
+          <form className="stack settings-form" onSubmit={saveOrganization}><label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label><label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label><button disabled={busy}>Save organization details</button></form>
+        </section>}
         {message && <p className="status-message" role="status">{message}</p>}
       </main>
     );
@@ -834,7 +865,7 @@ export default function Workspace() {
     return (
       <main>
         <header className="app-header"><div><p className="eyebrow">PULSEGRID HEALTH</p><h1>Organization access</h1><p className="muted">Invite colleagues and assign the minimum role they need.</p></div><div className="user-menu"><span>{me.full_name}<small>{me.email}</small></span><button className="button-secondary" onClick={signOut} disabled={busy}>Sign out</button></div></header>
-        <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings">Account settings</Link><Link href="/organization/access" aria-current="page">Organization access</Link></nav>
+        <nav className="workspace-nav" aria-label="Workspace navigation"><Link href="/workspace">Workspace</Link><Link href="/settings/profile">Personal settings</Link><Link href="/organization/access" aria-current="page">Organization access</Link></nav>
               {currentOrg?.role === "org_admin" && (
         <section className="card section">
           <h2>Organization access</h2>
@@ -909,7 +940,8 @@ export default function Workspace() {
             POPULATION &amp; WORKFORCE HEALTH INTELLIGENCE
           </p>
           <h1>PulseGrid Health</h1>
-          <p className="muted">Organization workspace</p>
+          <p className="muted">{workspaceHeading}</p>
+          <p className="muted">{workspaceDescription}</p>
         </div>
 
         <div className="user-menu">
@@ -930,7 +962,7 @@ export default function Workspace() {
 
       <nav className="workspace-nav" aria-label="Workspace navigation">
         <Link href="/workspace" aria-current="page">Workspace</Link>
-        <Link href="/settings">Account settings</Link>
+        <Link href="/settings/profile">Account settings</Link>
         {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
       </nav>
 
