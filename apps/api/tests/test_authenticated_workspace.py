@@ -271,9 +271,9 @@ def test_upload_activity_notifications_and_reviewer_assignment(client):
     accept(client, reviewer_token, "Health Reviewer", "Reviewer-Password-2026!")
     admin_csrf = csrf(client)
 
-    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\\n"
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
     rows += "".join(
-        f"community,ACTIVITY-GROUP,ACTIVITY-SOURCE,2026-10-{day:02d},weekly_reports,{value},5000,reports\\n"
+        f"community,ACTIVITY-GROUP,ACTIVITY-SOURCE,2026-10-{day:02d},weekly_reports,{value},5000,reports\n"
         for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
     )
     imported = client.post("/api/v1/observations/import",
