@@ -8,7 +8,8 @@ const API = "";
 type Org = {
   id: string;
   name: string;
-  organization_type: string;\n  role: "org_admin" | "analyst" | "reviewer" | "viewer";
+  organization_type: string;
+  role: "org_admin" | "analyst" | "reviewer" | "viewer";
 };
 
 type Me = {
