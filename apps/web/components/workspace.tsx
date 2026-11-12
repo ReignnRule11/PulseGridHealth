@@ -962,7 +962,7 @@ export default function Workspace() {
 
       <nav className="workspace-nav" aria-label="Workspace navigation">
         <Link href="/workspace" aria-current="page">Workspace</Link>
-        <Link href="/settings/profile">Account settings</Link>
+        <Link href="/settings/profile">Personal settings</Link>
         {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
       </nav>
 
