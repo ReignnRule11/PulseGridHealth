@@ -1,6 +1,8 @@
 import hashlib
 import hmac
 import secrets
+import smtplib
+from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -13,7 +15,7 @@ from app.core.config import settings
 from app.db import get_db
 from app.models import (
     AuthSession, Organization, OrganizationInvitation,
-    OrganizationMembership, User,
+    OrganizationMembership, User, AccountActionToken,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["identity and access"])
@@ -385,3 +387,220 @@ def require_tenant_csrf(request: Request, context: dict = Depends(get_request_te
     if not hmac.compare_digest(_hash_token(cookie), context["csrf_hash"] or ""):
         raise HTTPException(status_code=403, detail="csrf_session_mismatch")
     return True
+
+
+# Account management ---------------------------------------------------------
+class ProfileUpdateIn(BaseModel):
+    full_name: str = Field(min_length=2, max_length=160)
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class EmailChangeRequestIn(BaseModel):
+    new_email: str = Field(min_length=5, max_length=254)
+    current_password: str = Field(min_length=1, max_length=256)
+
+
+class TokenIn(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+
+
+class PasswordResetRequestIn(BaseModel):
+    email: str = Field(min_length=5, max_length=254)
+
+
+class PasswordResetIn(TokenIn):
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class OrganizationUpdateIn(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+    organization_type: str = Field(min_length=2, max_length=80)
+
+
+def _send_account_email(recipient: str, subject: str, body: str):
+    if not settings.smtp_host or not settings.smtp_from_email:
+        raise HTTPException(status_code=503, detail="email_delivery_not_configured")
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = settings.smtp_from_email
+    message["To"] = recipient
+    message.set_content(body)
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+            if settings.smtp_starttls:
+                server.starttls()
+            if settings.smtp_username:
+                server.login(settings.smtp_username, settings.smtp_password)
+            server.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(status_code=502, detail="email_delivery_failed") from exc
+
+
+def _issue_account_token(db: Session, user: User, purpose: str, ttl_minutes: int = 30) -> str:
+    # Invalidate older outstanding tokens for the same purpose.
+    db.query(AccountActionToken).filter(
+        AccountActionToken.user_id == user.id,
+        AccountActionToken.purpose == purpose,
+        AccountActionToken.used_at.is_(None),
+    ).update({"used_at": _now()}, synchronize_session=False)
+    raw = secrets.token_urlsafe(36)
+    db.add(AccountActionToken(
+        user_id=user.id, purpose=purpose, token_hash=_hash_token(raw),
+        expires_at=_now() + timedelta(minutes=ttl_minutes),
+    ))
+    db.flush()
+    return raw
+
+
+def _consume_account_token(db: Session, raw: str, purpose: str):
+    token = db.scalar(select(AccountActionToken).where(
+        AccountActionToken.token_hash == _hash_token(raw),
+        AccountActionToken.purpose == purpose,
+    ).with_for_update())
+    if not token or token.used_at or _aware(token.expires_at) <= _now():
+        raise HTTPException(status_code=400, detail="token_invalid_or_expired")
+    user = db.get(User, token.user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="account_unavailable")
+    token.used_at = _now()
+    return user
+
+
+@router.patch("/profile")
+def update_profile(payload: ProfileUpdateIn, identity: dict = Depends(get_identity),
+                   csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    user = identity["user"]
+    user.full_name = payload.full_name.strip()
+    db.commit()
+    return {"id": str(user.id), "full_name": user.full_name, "email": user.email}
+
+
+@router.post("/password/change")
+def change_password(payload: PasswordChangeIn, identity: dict = Depends(get_identity),
+                    csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    user = identity["user"]
+    if not _verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="current_password_incorrect")
+    if hmac.compare_digest(payload.current_password, payload.new_password):
+        raise HTTPException(status_code=400, detail="new_password_must_be_different")
+    user.password_hash = _hash_password(payload.new_password)
+    # Revoke every other session; retain the session used to change the password.
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id,
+        AuthSession.id != identity["session"].id,
+        AuthSession.revoked_at.is_(None),
+    ).update({"revoked_at": _now()}, synchronize_session=False)
+    db.commit()
+    return {"status": "password_changed", "other_sessions_revoked": True}
+
+
+@router.post("/email/change/request")
+def request_email_change(payload: EmailChangeRequestIn, request: Request,
+                         identity: dict = Depends(get_identity),
+                         csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    _origin_ok(request)
+    user = identity["user"]
+    if not _verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="current_password_incorrect")
+    new_email = payload.new_email.strip().lower()
+    if new_email == user.email:
+        raise HTTPException(status_code=400, detail="email_unchanged")
+    if db.scalar(select(User.id).where(User.email == new_email)):
+        raise HTTPException(status_code=409, detail="email_already_registered")
+    raw = _issue_account_token(db, user, "email_change")
+    db.commit()
+    _send_account_email(new_email, "Confirm your PulseGrid Health email change",
+        f"Someone requested to change your PulseGrid Health account email to this address. "
+        f"If this was you, confirm within 30 minutes using this token:\n\n{raw}\n\n"
+        "If you did not request this, ignore this email.")
+    # The requested address is stored only after confirmation; token is never returned.
+    pending = db.scalar(select(AccountActionToken).where(
+        AccountActionToken.token_hash == _hash_token(raw), AccountActionToken.purpose == "email_change"))
+    pending.payload = new_email
+    db.commit()
+    return {"status": "verification_sent", "message": "Check the new email address to confirm the change."}
+
+
+@router.post("/email/change/confirm")
+def confirm_email_change(payload: TokenIn, identity: dict = Depends(get_identity),
+                         csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    user = identity["user"]
+    token = db.scalar(select(AccountActionToken).where(
+        AccountActionToken.token_hash == _hash_token(payload.token),
+        AccountActionToken.purpose == "email_change",
+    ).with_for_update())
+    if not token or token.used_at or _aware(token.expires_at) <= _now():
+        raise HTTPException(status_code=400, detail="token_invalid_or_expired")
+    new_email = token.payload
+    if not new_email or db.scalar(select(User.id).where(User.email == new_email)):
+        raise HTTPException(status_code=409, detail="email_already_registered")
+    if token.user_id != user.id:
+        raise HTTPException(status_code=403, detail="token_account_mismatch")
+    user.email = new_email
+    token.used_at = _now()
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id,
+        AuthSession.id != identity["session"].id,
+        AuthSession.revoked_at.is_(None),
+    ).update({"revoked_at": _now()}, synchronize_session=False)
+    db.commit()
+    return {"status": "email_changed", "email": user.email, "other_sessions_revoked": True}
+
+
+@router.post("/password/forgot")
+def request_password_reset(payload: PasswordResetRequestIn, request: Request,
+                           db: Session = Depends(get_db)):
+    _csrf_pre_auth(request)
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(User.email == email, User.is_active.is_(True)))
+    # Always return the same response for known and unknown addresses.
+    if user:
+        raw = _issue_account_token(db, user, "password_reset")
+        db.commit()
+        try:
+            _send_account_email(email, "Reset your PulseGrid Health password",
+                f"A password reset was requested for your account. Use this one-time token "
+                f"within 30 minutes in the PulseGrid Health password reset screen:\n\n{raw}\n\n"
+                "If you did not request this, ignore this email.")
+        except HTTPException:
+            # Do not expose account existence; log-free fail closed.
+            pass
+    return {"status": "if_account_exists_email_sent"}
+
+
+@router.post("/password/reset")
+def reset_password(payload: PasswordResetIn, request: Request, db: Session = Depends(get_db)):
+    _csrf_pre_auth(request)
+    user = _consume_account_token(db, payload.token, "password_reset")
+    user.password_hash = _hash_password(payload.new_password)
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None)
+    ).update({"revoked_at": _now()}, synchronize_session=False)
+    db.commit()
+    return {"status": "password_reset", "sessions_revoked": True}
+
+
+@router.patch("/organizations/{organization_id}")
+def update_organization(organization_id: UUID, payload: OrganizationUpdateIn,
+                        context: dict = Depends(require_roles("org_admin")),
+                        csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
+    membership = context["membership"]
+    if membership.organization_id != organization_id:
+        raise HTTPException(status_code=403, detail="organization_access_denied")
+    organization = db.get(Organization, organization_id)
+    if not organization:
+        raise HTTPException(status_code=404, detail="organization_not_found")
+    name = payload.name.strip()
+    duplicate = db.scalar(select(Organization.id).where(
+        Organization.name == name, Organization.id != organization_id))
+    if duplicate:
+        raise HTTPException(status_code=409, detail="organization_name_already_used")
+    organization.name = name
+    organization.organization_type = payload.organization_type.strip()
+    db.commit()
+    return {"id": str(organization.id), "name": organization.name,
+            "organization_type": organization.organization_type}
