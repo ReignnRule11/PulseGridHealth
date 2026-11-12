@@ -270,11 +270,25 @@ def test_account_profile_password_and_organization_updates(auth_client):
     organization_id = login.json()["organizations"][0]["id"]
     csrf = client.cookies.get("pulsegrid_csrf")
 
+    # Administrator display names are locked, but non-admin account names remain editable.
     profile = client.patch("/api/v1/auth/profile",
         headers={"X-CSRF-Token": csrf},
         json={"full_name": "Updated Administrator"})
-    assert profile.status_code == 200
-    assert profile.json()["full_name"] == "Updated Administrator"
+    assert profile.status_code == 403
+    assert profile.json()["detail"] == "administrator_display_name_locked"
+
+    db = next(app.dependency_overrides[get_db]())
+    membership = db.query(OrganizationMembership).filter_by(role="org_admin").first()
+    membership.role = "analyst"
+    db.commit()
+    editable_profile = client.patch("/api/v1/auth/profile",
+        headers={"X-CSRF-Token": csrf},
+        json={"full_name": "Updated Analyst"})
+    assert editable_profile.status_code == 200
+    assert editable_profile.json()["full_name"] == "Updated Analyst"
+    membership.role = "org_admin"
+    db.commit()
+    db.close()
 
     changed = client.post("/api/v1/auth/password/change",
         headers={"X-CSRF-Token": csrf},

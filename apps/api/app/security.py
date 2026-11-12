@@ -609,6 +609,13 @@ def _consume_account_token(db: Session, raw: str, purpose: str):
 def update_profile(payload: ProfileUpdateIn, identity: dict = Depends(get_identity),
                    csrf: bool = Depends(require_csrf), db: Session = Depends(get_db)):
     user = identity["user"]
+    is_org_admin = db.scalar(select(OrganizationMembership.id).where(
+        OrganizationMembership.user_id == user.id,
+        OrganizationMembership.role == "org_admin",
+        OrganizationMembership.is_active.is_(True),
+    ).limit(1))
+    if is_org_admin:
+        raise HTTPException(status_code=403, detail="administrator_display_name_locked")
     user.full_name = payload.full_name.strip()
     db.commit()
     return {"id": str(user.id), "full_name": user.full_name, "email": user.email}
