@@ -63,7 +63,7 @@ type Me = {
 
 type AccessMember = {
   user_id: string; membership_id: string; full_name: string; email: string;
-  role: "org_admin" | "analyst" | "reviewer" | "viewer";
+  role: "org_admin" | "analyst" | "reviewer" | "viewer"; is_primary_admin: boolean;
   is_active: boolean; account_active: boolean; joined_at: string; account_created_at: string;
 };
 type AccessInvitation = {
