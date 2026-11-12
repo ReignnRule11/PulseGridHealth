@@ -260,16 +260,17 @@ export default function Workspace() {
         setIdentityLoading(false);
         setMessage(e instanceof Error ? e.message : "Connection failed");
       });
+  }, [requestCsrf, loadIdentity]);
 
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token") ?? params.get("invite");
-    if (token) {
-      if (pathname === "/invite") setInviteInput(token);
-      if (pathname === "/reset-password") setResetToken(token);
-      if (pathname === "/verify-email-change") setEmailToken(token);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, [requestCsrf, loadIdentity, pathname]);
+    if (!token) return;
+    if (pathname === "/invite") setInviteInput(token);
+    if (pathname === "/reset-password") setResetToken(token);
+    if (pathname === "/verify-email-change") setEmailToken(token);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [pathname]);
 
   useEffect(() => {
     if (identityLoading) return;
@@ -713,7 +714,7 @@ export default function Workspace() {
           <Link href="/" className="back-link">← PulseGrid Health</Link>
           <p className="eyebrow">SECURE ORGANIZATION ACCESS</p>
           <h1>Welcome back</h1>
-          <p className="muted">Sign in to continue to your organization's health intelligence workspace.</p>
+          <p className="muted">Sign in to continue to your organization health intelligence workspace.</p>
         </section>
         <section className="card auth-card">
           <h2>Sign in</h2>
