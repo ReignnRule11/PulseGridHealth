@@ -153,7 +153,7 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(page).toHaveURL(/\/workspace$/);
 
   await page.getByRole("link", { name: "Organization access", exact: true }).click();
-  await expect(page).toHaveURL(/\\/organization\\/access$/);
+  await expect(page).toHaveURL(/\/organization\/access$/);
   await expect(page.getByRole("heading", { name: "Organization members" })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: adminEmail })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Invitation history" })).toBeVisible();
