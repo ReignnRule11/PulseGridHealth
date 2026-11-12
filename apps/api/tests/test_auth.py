@@ -164,6 +164,47 @@ def test_org_admin_can_view_accepted_members_and_invitation_history(auth_client)
                for row in data["invitations"])
 
 
+def test_org_admin_can_change_member_role_and_audit_change(auth_client):
+    client = auth_client
+    assert _bootstrap(client).status_code == 200
+    login = _login(client)
+    organization_id = login.json()["organizations"][0]["id"]
+    invite = client.post(
+        f"/api/v1/auth/organizations/{organization_id}/invitations",
+        headers={"X-CSRF-Token": client.cookies.get("pulsegrid_csrf"),
+                 "X-Organization-ID": organization_id},
+        json={"email": "role-change@example.org", "role": "viewer"},
+    )
+    assert invite.status_code == 200, invite.text
+    accepted = client.post(
+        "/api/v1/auth/invitations/accept",
+        headers={"X-CSRF-Token": _csrf(client)},
+        json={"token": invite.json()["invitation_token"],
+              "full_name": "Role Change Member",
+              "password": "Viewer-Strong-Password-2026!"},
+    )
+    assert accepted.status_code == 200, accepted.text
+    roster = client.get(
+        f"/api/v1/auth/organizations/{organization_id}/access",
+        headers={"X-Organization-ID": organization_id},
+    ).json()
+    member = next(row for row in roster["members"] if row["email"] == "role-change@example.org")
+    changed = client.patch(
+        f"/api/v1/auth/organizations/{organization_id}/members/{member['user_id']}",
+        headers={"X-CSRF-Token": client.cookies.get("pulsegrid_csrf"),
+                 "X-Organization-ID": organization_id},
+        json={"role": "reviewer"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["role"] == "reviewer"
+    refreshed = client.get(
+        f"/api/v1/auth/organizations/{organization_id}/access",
+        headers={"X-Organization-ID": organization_id},
+    ).json()
+    assert next(row for row in refreshed["members"] if row["user_id"] == member["user_id"])["role"] == "reviewer"
+    assert refreshed["audit"][0]["action"] == "member_role_changed"
+
+
 def test_membership_is_required_for_selected_organization(auth_client):
     client = auth_client
     assert _bootstrap(client).status_code == 200
