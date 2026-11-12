@@ -4,10 +4,11 @@ from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db import get_db
-from app.models import Organization, Community, WorkforceGroup, DataSource, HealthObservation, DetectionResult, Alert
+from app.models import Organization, Community, WorkforceGroup, DataSource, HealthObservation, DetectionResult, Alert, DataImportBatch, Notification, OrganizationMembership, User
 from app.security import router as security_router, get_request_tenant, enforce_roles, require_tenant_csrf
 from app.review import router as review_router
 from app.ai_intelligence import router as ai_router
+from app.activity import router as activity_router
 from app.services.ingestion import parse_csv
 from app.services.detection import robust_anomaly
 
@@ -15,6 +16,7 @@ app = FastAPI(title="PulseGrid Health API", version="0.4.0")
 app.include_router(security_router)
 app.include_router(review_router)
 app.include_router(ai_router)
+app.include_router(activity_router)
 origins = [x.strip() for x in settings.cors_origins.split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware, allow_origins=origins, allow_credentials=True,
@@ -146,14 +148,16 @@ def list_alerts(status: str = Query(default="pending_review", max_length=30),
                 limit: int = Query(default=50, ge=1, le=100),
                 context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
     org_id = context["organization_id"]
-    rows = db.execute(select(Alert, DetectionResult, HealthObservation)
+    rows = db.execute(select(Alert, DetectionResult, HealthObservation, DataImportBatch, User)
         .join(DetectionResult, Alert.detection_id == DetectionResult.id)
         .join(HealthObservation, DetectionResult.observation_id == HealthObservation.id)
+        .outerjoin(DataImportBatch, HealthObservation.import_batch_id == DataImportBatch.id)
+        .outerjoin(User, DataImportBatch.uploaded_by_user_id == User.id)
         .where(Alert.organization_id == org_id,
                Alert.status == status if status != "all" else True)
         .order_by(Alert.created_at.desc()).limit(limit)).all()
     result = []
-    for alert, detection, obs in rows:
+    for alert, detection, obs, import_batch, uploader in rows:
         if obs.community_id:
             group_code = db.scalar(select(Community.region_code).where(
                 Community.id == obs.community_id, Community.organization_id == org_id))
@@ -168,7 +172,12 @@ def list_alerts(status: str = Query(default="pending_review", max_length=30),
             "observed_date": obs.observed_date.isoformat(), "indicator": obs.indicator,
             "value": float(obs.value), "unit": obs.unit, "baseline": detection.baseline,
             "score": detection.anomaly_score, "history_count": detection.history_count,
-            "reason": detection.reason, "explanation": alert.explanation})
+            "reason": detection.reason, "explanation": alert.explanation,
+            "assigned_to_user_id": str(alert.assigned_to_user_id) if alert.assigned_to_user_id else None,
+            "uploaded_by": uploader.full_name if uploader else None,
+            "uploader_email": uploader.email if uploader else None,
+            "upload_batch_id": str(import_batch.id) if import_batch else None,
+            "upload_filename": import_batch.filename if import_batch else None})
     return {"items": result}
 
 
@@ -181,9 +190,34 @@ async def import_observations(file: UploadFile = File(...),
     if file.content_type not in ("text/csv", "application/vnd.ms-excel", "application/octet-stream"):
         raise HTTPException(status_code=415, detail="csv_only")
     content = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
+    batch = None
+    if context.get("actor_user_id"):
+        batch = DataImportBatch(
+            organization_id=org_id, uploaded_by_user_id=context["actor_user_id"],
+            filename=(file.filename or "observations.csv")[:255],
+            file_size_bytes=len(content), status="processing",
+        )
+        db.add(batch)
+        db.flush()
     try:
         rows, errors = parse_csv(content, settings.max_upload_mb * 1024 * 1024)
     except ValueError as exc:
+        if batch:
+            batch.status = "rejected"
+            admins = db.execute(select(OrganizationMembership.user_id).where(
+                OrganizationMembership.organization_id == org_id,
+                OrganizationMembership.is_active.is_(True),
+                OrganizationMembership.role == "org_admin",
+                OrganizationMembership.user_id != context["actor_user_id"],
+            )).scalars().all()
+            for recipient_id in admins:
+                db.add(Notification(
+                    organization_id=org_id, recipient_user_id=recipient_id,
+                    kind="upload_rejected", title="Dataset upload was rejected",
+                    message=f"{context['actor']} attempted to upload {file.filename or 'a dataset'}, but validation failed: {str(exc)}."[:500],
+                    related_type="import_batch", related_id=batch.id,
+                ))
+            db.commit()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     accepted = duplicates = alerts_created = 0
     cohort_hints = {}
@@ -209,18 +243,63 @@ async def import_observations(file: UploadFile = File(...),
             observation = HealthObservation(organization_id=org_id,
                 community_id=community.id if community else None,
                 workforce_group_id=workforce.id if workforce else None,
-                source_id=source.id, observed_date=row.observed_date, indicator=row.indicator,
+                source_id=source.id, import_batch_id=batch.id if batch else None,
+                observed_date=row.observed_date, indicator=row.indicator,
                 value=row.value, denominator=row.denominator, unit=row.unit)
             db.add(observation)
             db.flush()
             alerts_created += _detect_for_observation(db, observation)
             accepted += 1
+        if batch:
+            batch.accepted_count = accepted
+            batch.duplicate_count = duplicates
+            batch.rejected_count = len(errors)
+            batch.alerts_created = alerts_created
+            batch.status = "completed"
+            admins = db.execute(
+                select(OrganizationMembership.user_id).where(
+                    OrganizationMembership.organization_id == org_id,
+                    OrganizationMembership.is_active.is_(True),
+                    OrganizationMembership.role == "org_admin",
+                    OrganizationMembership.user_id != context["actor_user_id"],
+                )
+            ).scalars().all()
+            recipients = set(admins)
+            if alerts_created:
+                reviewers = db.execute(
+                    select(OrganizationMembership.user_id).where(
+                        OrganizationMembership.organization_id == org_id,
+                        OrganizationMembership.is_active.is_(True),
+                        OrganizationMembership.role.in_(["reviewer", "org_admin"]),
+                        OrganizationMembership.user_id != context["actor_user_id"],
+                    )
+                ).scalars().all()
+                recipients.update(reviewers)
+            for recipient_id in recipients:
+                is_reviewer = db.scalar(select(OrganizationMembership.role).where(
+                    OrganizationMembership.organization_id == org_id,
+                    OrganizationMembership.user_id == recipient_id,
+                    OrganizationMembership.is_active.is_(True),
+                )) == "reviewer"
+                kind = "review_queue" if alerts_created and is_reviewer else "upload_activity"
+                title = "New candidate alerts need review" if kind == "review_queue" else "New dataset uploaded"
+                message = (f"{context['actor']} uploaded {file.filename or 'a dataset'}; "
+                           f"{alerts_created} candidate alert(s) were created." if kind == "review_queue"
+                           else f"{context['actor']} uploaded {file.filename or 'a dataset'}: "
+                           f"{accepted} accepted, {duplicates} duplicates, {len(errors)} rejected, "
+                           f"{alerts_created} candidate alert(s) created.")
+                db.add(Notification(
+                    organization_id=org_id, recipient_user_id=recipient_id,
+                    kind=kind, title=title, message=message[:500],
+                    related_type="import_batch", related_id=batch.id,
+                ))
         db.commit()
     except Exception:
         db.rollback()
         raise
     return {"accepted": accepted, "duplicates": duplicates, "rejected": len(errors),
             "alerts_created": alerts_created, "errors": errors[:50],
+            "import_batch_id": str(batch.id) if batch else None,
             "notice": "Aggregate observations only. Candidate alerts require human review."}
 
 

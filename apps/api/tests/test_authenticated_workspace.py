@@ -262,3 +262,52 @@ def test_ai_alert_explanation_security_grounding_and_provider_failures(client, m
         assert unknown.status_code == 404
     finally:
         db.close()
+
+
+def test_upload_activity_notifications_and_reviewer_assignment(client):
+    organization_id = bootstrap(client)
+    _, admin_csrf = login(client, "admin@workspace.test", "Admin-Password-2026!")
+    reviewer_token = invite(client, organization_id, "reviewer@workspace.test", "reviewer", admin_csrf)
+    accept(client, reviewer_token, "Health Reviewer", "Reviewer-Password-2026!")
+    admin_csrf = csrf(client)
+
+    rows = "domain,group_code,source_code,observed_date,indicator,value,denominator,unit\n"
+    rows += "".join(
+        f"community,ACTIVITY-GROUP,ACTIVITY-SOURCE,2026-10-{day:02d},weekly_reports,{value},5000,reports\n"
+        for day, value in [(1, 10), (2, 11), (3, 9), (4, 10), (5, 11), (6, 10), (7, 9), (8, 35)]
+    )
+    imported = client.post("/api/v1/observations/import",
+        headers={"X-Organization-ID": organization_id, "X-CSRF-Token": admin_csrf},
+        files={"file": ("activity.csv", io.BytesIO(rows.encode()), "text/csv")})
+    assert imported.status_code == 200, imported.text
+
+    headers = {"X-Organization-ID": organization_id}
+    history = client.get("/api/v1/activity/uploads", headers=headers)
+    assert history.status_code == 200
+    assert history.json()["items"][0]["filename"] == "activity.csv"
+    assert history.json()["items"][0]["uploaded_by"] == "Workspace Administrator"
+
+    reviewers = client.get("/api/v1/reviewers", headers=headers)
+    reviewer_id = reviewers.json()["items"][0]["user_id"]
+    alert_id = client.get("/api/v1/alerts?status=all", headers=headers).json()["items"][0]["id"]
+    assigned = client.patch(f"/api/v1/alerts/{alert_id}/assignment",
+        headers={**headers, "X-CSRF-Token": admin_csrf},
+        json={"reviewer_user_id": reviewer_id})
+    assert assigned.status_code == 200, assigned.text
+
+    _, reviewer_csrf = login(client, "reviewer@workspace.test", "Reviewer-Password-2026!")
+    inbox = client.get("/api/v1/alerts/inbox", headers=headers)
+    assert inbox.status_code == 200
+    assert len(inbox.json()["items"]) == 1
+    assert inbox.json()["items"][0]["assigned_to_user_id"] == reviewer_id
+
+    notifications = client.get("/api/v1/notifications", headers=headers)
+    assert notifications.status_code == 200
+    kinds = {item["kind"] for item in notifications.json()["items"]}
+    assert "review_queue" in kinds
+    assert "review_assignment" in kinds
+    assignment_notice = next(item for item in notifications.json()["items"] if item["kind"] == "review_assignment")
+    marked = client.post(f"/api/v1/notifications/{assignment_notice['id']}/read",
+        headers={**headers, "X-CSRF-Token": reviewer_csrf})
+    assert marked.status_code == 200
+    assert marked.json()["is_read"] is True

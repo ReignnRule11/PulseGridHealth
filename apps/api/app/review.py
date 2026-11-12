@@ -1,15 +1,105 @@
 from datetime import datetime, timezone
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Alert, Investigation, ResponseAction, AuditLog
+from app.core.config import settings
+from app.models import Alert, Investigation, ResponseAction, AuditLog, User, OrganizationMembership, Notification, DetectionResult, HealthObservation, Community, WorkforceGroup, DataImportBatch
 from app.review_schemas import FindingsIn, ResolutionIn, ResponseActionIn
 from app.security import get_request_tenant, enforce_roles, require_tenant_csrf
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["human review"])
 
+
+
+class AssignmentIn(BaseModel):
+    reviewer_user_id: UUID | None
+
+
+@router.get("/inbox")
+def reviewer_inbox(context: dict = Depends(get_request_tenant), db: Session = Depends(get_db)):
+    enforce_roles(context, "org_admin", "reviewer")
+    query = select(Alert, DetectionResult, HealthObservation, User, DataImportBatch).join(
+        DetectionResult, Alert.detection_id == DetectionResult.id
+    ).join(HealthObservation, DetectionResult.observation_id == HealthObservation.id
+    ).outerjoin(User, Alert.assigned_to_user_id == User.id
+    ).outerjoin(DataImportBatch, HealthObservation.import_batch_id == DataImportBatch.id
+    ).where(Alert.organization_id == context["organization_id"])
+    if context["role"] == "reviewer":
+        query = query.where(
+            (Alert.assigned_to_user_id == context["actor_user_id"]) |
+            (Alert.assigned_to_user_id.is_(None))
+        )
+    rows = db.execute(query.order_by(Alert.created_at.desc()).limit(100)).all()
+    items = []
+    for alert, detection, observation, assignee, batch in rows:
+        if observation.community_id:
+            group_code = db.scalar(select(Community.region_code).where(
+                Community.id == observation.community_id,
+                Community.organization_id == context["organization_id"]))
+            domain = "community"
+        else:
+            group = db.scalar(select(WorkforceGroup).where(
+                WorkforceGroup.id == observation.workforce_group_id,
+                WorkforceGroup.organization_id == context["organization_id"]))
+            if not group or not group.cohort_size or group.cohort_size < settings.min_workforce_cohort_size:
+                continue
+            group_code, domain = group.location_code, "workforce"
+        items.append({
+            "id": str(alert.id), "status": alert.status, "severity": alert.severity,
+            "domain": domain, "group_code": group_code,
+            "observed_date": observation.observed_date.isoformat(),
+            "indicator": observation.indicator, "value": float(observation.value),
+            "unit": observation.unit, "baseline": detection.baseline,
+            "score": detection.anomaly_score, "explanation": alert.explanation,
+            "assigned_to_user_id": str(alert.assigned_to_user_id) if alert.assigned_to_user_id else None,
+            "assignee_name": assignee.full_name if assignee else None,
+            "assignee_email": assignee.email if assignee else None,
+            "uploaded_filename": batch.filename if batch else None,
+        })
+    return {"items": items}
+
+
+@router.patch("/{alert_id}/assignment")
+def assign_alert(alert_id: UUID, payload: AssignmentIn,
+                 context: dict = Depends(get_request_tenant),
+                 csrf: bool = Depends(require_tenant_csrf),
+                 db: Session = Depends(get_db)):
+    enforce_roles(context, "org_admin")
+    alert = _alert(db, alert_id, context["organization_id"])
+    reviewer = None
+    if payload.reviewer_user_id:
+        reviewer = db.scalar(
+            select(User).join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+            .where(
+                User.id == payload.reviewer_user_id, User.is_active.is_(True),
+                OrganizationMembership.organization_id == context["organization_id"],
+                OrganizationMembership.is_active.is_(True),
+                OrganizationMembership.role.in_(["reviewer", "org_admin"]),
+            )
+        )
+        if not reviewer:
+            raise HTTPException(status_code=422, detail="assignee_must_be_active_reviewer_or_admin")
+    before = str(alert.assigned_to_user_id) if alert.assigned_to_user_id else None
+    alert.assigned_to_user_id = reviewer.id if reviewer else None
+    alert.assigned_by_user_id = context["actor_user_id"]
+    _audit(db, alert, context, "alert.assignment_changed", {
+        "before_user_id": before,
+        "after_user_id": str(reviewer.id) if reviewer else None,
+    })
+    if reviewer and reviewer.id != context["actor_user_id"]:
+        db.add(Notification(
+            organization_id=context["organization_id"], recipient_user_id=reviewer.id,
+            kind="review_assignment", title="A candidate alert was assigned to you",
+            message=f"{alert.severity.title()} priority candidate alert assigned for review.",
+            related_type="alert", related_id=alert.id,
+        ))
+    db.commit()
+    return {"alert_id": str(alert.id),
+            "assigned_to_user_id": str(reviewer.id) if reviewer else None,
+            "assignee_name": reviewer.full_name if reviewer else None}
 
 def _alert(db: Session, alert_id: UUID, org_id) -> Alert:
     alert = db.scalar(select(Alert).where(Alert.id == alert_id, Alert.organization_id == org_id))

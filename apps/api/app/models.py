@@ -42,6 +42,36 @@ class DataSource(Base):
     provenance: Mapped[str | None] = mapped_column(String(500))
     authorised: Mapped[bool] = mapped_column(default=False, nullable=False)
 
+class DataImportBatch(Base):
+    __tablename__ = "data_import_batches"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    uploaded_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    accepted_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    rejected_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    alerts_created: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="processing", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), nullable=False, index=True)
+    recipient_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    related_type: Mapped[str | None] = mapped_column(String(40))
+    related_id: Mapped[uuid.UUID | None] = mapped_column()
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class HealthObservation(Base):
     __tablename__ = "health_observations"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -49,6 +79,7 @@ class HealthObservation(Base):
     community_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("communities.id"))
     workforce_group_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("workforce_groups.id"))
     source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("data_sources.id"), nullable=False)
+    import_batch_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("data_import_batches.id"), index=True)
     observed_date: Mapped[date] = mapped_column(Date, nullable=False)
     indicator: Mapped[str] = mapped_column(String(120), nullable=False)
     value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
@@ -86,6 +117,8 @@ class Alert(Base):
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pending_review", nullable=False)
     explanation: Mapped[str | None] = mapped_column(String(2000))
+    assigned_to_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), index=True)
+    assigned_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 
