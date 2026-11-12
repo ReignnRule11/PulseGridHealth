@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
+from app.core.config import settings
 from app.models import Alert, Investigation, ResponseAction, AuditLog, User, OrganizationMembership, Notification, DetectionResult, HealthObservation, Community, WorkforceGroup, DataImportBatch
 from app.review_schemas import FindingsIn, ResolutionIn, ResponseActionIn
 from app.security import get_request_tenant, enforce_roles, require_tenant_csrf
@@ -43,7 +44,7 @@ def reviewer_inbox(context: dict = Depends(get_request_tenant), db: Session = De
             group = db.scalar(select(WorkforceGroup).where(
                 WorkforceGroup.id == observation.workforce_group_id,
                 WorkforceGroup.organization_id == context["organization_id"]))
-            if not group or not group.cohort_size:
+            if not group or not group.cohort_size or group.cohort_size < settings.min_workforce_cohort_size:
                 continue
             group_code, domain = group.location_code, "workforce"
         items.append({
