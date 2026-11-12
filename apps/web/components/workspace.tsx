@@ -245,7 +245,7 @@ export default function Workspace() {
   );
 
   const loadOrganizationAccess = useCallback(async () => {
-    if (!orgId || currentOrg?.role !== "org_admin") return;
+    if (!orgId || me?.organizations.find((organization) => organization.id === orgId)?.role !== "org_admin") return;
     setAccessLoading(true);
     try {
       const response = await apiFetch(`/api/v1/auth/organizations/${orgId}/access`);
@@ -258,7 +258,7 @@ export default function Workspace() {
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Unable to load organization access records.");
     } finally { setAccessLoading(false); }
-  }, [orgId, currentOrg?.role, apiFetch]);
+  }, [orgId, me, apiFetch]);
 
   async function updateMember(userId: string, patch: { role?: string; is_active?: boolean }) {
     setBusy(true); setMessage("");
@@ -331,8 +331,8 @@ export default function Workspace() {
   }, [identityLoading, me, pathname, router]);
 
   useEffect(() => {
-    if (pathname === "/organization/access" && me && orgId && currentOrg?.role === "org_admin") loadOrganizationAccess();
-  }, [pathname, me, orgId, currentOrg?.role, loadOrganizationAccess]);
+    if (pathname === "/organization/access" && me && orgId && me.organizations.find((organization) => organization.id === orgId)?.role === "org_admin") loadOrganizationAccess();
+  }, [pathname, me, orgId, loadOrganizationAccess]);
 
   useEffect(() => {
     if (me && orgId) loadWorkspace();
