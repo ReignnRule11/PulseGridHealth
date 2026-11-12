@@ -1506,10 +1506,10 @@ export default function Workspace() {
         <h2>{currentOrg.role === "org_admin" ? "Organization upload activity" : "My upload history"}</h2>
         <p className="muted">{currentOrg.role === "org_admin" ? "Every recorded dataset import in this organization, including who submitted it and the outcome." : "Your recent dataset imports and processing outcomes."}</p>
         {uploadActivity.length === 0 ? <p className="muted">No recorded uploads yet.</p> : <div className="table-wrap"><table>
-          <thead><tr><th>Dataset</th><th>Uploaded by</th><th>Time</th><th>Accepted</th><th>Duplicates</th><th>Rejected</th><th>Alerts</th></tr></thead>
+          <thead><tr><th>Dataset</th><th>Uploaded by</th><th>Time</th><th>Status</th><th>Accepted</th><th>Duplicates</th><th>Rejected</th><th>Alerts</th></tr></thead>
           <tbody>{uploadActivity.map((item) => <tr key={item.id}>
             <td>{item.filename}</td><td>{item.uploaded_by}<small>{item.uploader_email}</small></td>
-            <td>{new Date(item.created_at).toLocaleString()}</td><td>{item.accepted}</td><td>{item.duplicates}</td><td>{item.rejected}</td><td>{item.alerts_created}</td>
+            <td>{new Date(item.created_at).toLocaleString()}</td><td>{item.status}</td><td>{item.accepted}</td><td>{item.duplicates}</td><td>{item.rejected}</td><td>{item.alerts_created}</td>
           </tr>)}</tbody>
         </table></div>}
       </section>}
