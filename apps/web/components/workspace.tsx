@@ -7,6 +7,45 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 const API = "";
 
+type PasswordFieldProps = {
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: string;
+  required?: boolean;
+  minLength?: number;
+};
+
+function PasswordField({ value, onChange, autoComplete, required = false, minLength }: PasswordFieldProps) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="password-field-wrap">
+      <input
+        type={visible ? "text" : "password"}
+        autoComplete={autoComplete}
+        required={required}
+        minLength={minLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className="password-visibility-toggle"
+        aria-label={visible ? "Hide password" : "Show password"}
+        aria-pressed={visible}
+        title={visible ? "Hide password" : "Show password"}
+        onClick={() => setVisible((current) => !current)}
+      >
+        {visible ? (
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 3l18 18M10.6 10.6a2 2 0 002.8 2.8M9.9 5.2A10.8 10.8 0 0112 5c5.2 0 8.8 4.1 10 7-0.5 1.2-1.4 2.5-2.7 3.7M6.2 6.2C3.9 7.6 2.5 9.7 2 12c1.2 2.9 4.8 7 10 7 1.3 0 2.5-.3 3.6-.8" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8"/></svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
+
 type Org = {
   id: string;
   name: string;
@@ -877,7 +916,7 @@ export default function Workspace() {
           <h2>Sign in</h2>
           <form className="stack" onSubmit={signIn}>
             <label>Email<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-            <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+            <label>Password<PasswordField autoComplete="current-password" required value={password} onChange={setPassword} /></label>
             <button disabled={busy}>{busy ? "Signing in…" : "Sign in securely"}</button>
           </form>
           <div className="auth-links"><Link href="/forgot-password">Forgot your password?</Link><Link href="/invite">Accept an invitation</Link></div>
@@ -913,7 +952,7 @@ export default function Workspace() {
           <h2>Complete password reset</h2>
           <form className="stack" onSubmit={completePasswordReset}>
             <label>Reset token<input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} /></label>
-            <label>New password<input type="password" minLength={12} autoComplete="new-password" required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} /></label>
+            <label>New password<PasswordField minLength={12} autoComplete="new-password" required value={resetPassword} onChange={setResetPassword} /></label>
             <button disabled={busy}>{busy ? "Resetting…" : "Reset password"}</button>
           </form>
           {message && <p className="status-message" role="status">{message}</p>}
@@ -931,7 +970,7 @@ export default function Workspace() {
           <form className="stack" onSubmit={acceptInvite}>
             <label>Invitation token<input required value={inviteInput} onChange={(e) => setInviteInput(e.target.value)} /></label>
             <label>Full name<input required minLength={2} autoComplete="name" value={inviteName} onChange={(e) => setInviteName(e.target.value)} /></label>
-            <label>Create password<input type="password" required minLength={12} autoComplete="new-password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} /></label>
+            <label>Create password<PasswordField required minLength={12} autoComplete="new-password" value={invitePassword} onChange={setInvitePassword} /></label>
             <button disabled={busy}>{busy ? "Accepting…" : "Accept invitation"}</button>
           </form>
           {message && <p className="status-message" role="status">{message}</p>}
@@ -993,11 +1032,11 @@ export default function Workspace() {
         </section>)}
         {settingsPath === "/settings/security" && <section className="card section settings-panel">
           <h2>Change password</h2><p className="muted">Use a strong password that you do not reuse on other services. Other active sessions are revoked after a successful change.</p>
-          <form className="stack settings-form" onSubmit={changePassword}><label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label><label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label><button disabled={busy}>Change password</button></form>
+          <form className="stack settings-form" onSubmit={changePassword}><label>Current password<PasswordField required autoComplete="current-password" value={currentPassword} onChange={setCurrentPassword} /></label><label>New password<PasswordField required minLength={12} autoComplete="new-password" value={newPassword} onChange={setNewPassword} /></label><button disabled={busy}>Change password</button></form>
         </section>}
         {settingsPath === "/settings/email" && <section className="card section settings-panel">
           <h2>Change email address</h2><p className="muted">A verification token will be sent to your new email address. Your current email remains active until verification is complete.</p>
-          <form className="stack settings-form" onSubmit={requestEmailChange}><label>New email address<input type="email" required autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label><label>Confirm with current password<input type="password" required autoComplete="current-password" value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label><button disabled={busy}>Send verification</button></form>
+          <form className="stack settings-form" onSubmit={requestEmailChange}><label>New email address<input type="email" required autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label><label>Confirm with current password<PasswordField required autoComplete="current-password" value={emailCurrentPassword} onChange={setEmailCurrentPassword} /></label><button disabled={busy}>Send verification</button></form>
           <div className="auth-links"><Link href="/verify-email-change">I already have a verification token</Link></div>
         </section>}
         {isOrganizationSettings && <section className="card section settings-panel">
