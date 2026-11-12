@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     bootstrap_token: str = ""
     session_ttl_hours: int = 12
     invitation_ttl_hours: int = 72
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_starttls: bool = True
     ai_enabled: bool = False
     ai_provider_name: str = "openai_compatible"
     ai_api_base: str = "https://api.openai.com/v1"

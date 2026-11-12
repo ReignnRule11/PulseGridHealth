@@ -184,3 +184,15 @@ class OrganizationInvitation(Base):
     __table_args__ = (
         CheckConstraint("role IN ('org_admin', 'analyst', 'reviewer', 'viewer')", name="ck_invitation_role"),
     )
+
+
+class AccountActionToken(Base):
+    __tablename__ = "account_action_tokens"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    purpose: Mapped[str] = mapped_column(String(30), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    payload: Mapped[str | None] = mapped_column(String(254))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)

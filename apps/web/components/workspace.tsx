@@ -8,6 +8,7 @@ const API = "";
 type Org = {
   id: string;
   name: string;
+  organization_type: string;
   role: "org_admin" | "analyst" | "reviewer" | "viewer";
 };
 
@@ -135,6 +136,17 @@ export default function Workspace() {
   const [historyBusy, setHistoryBusy] = useState("");
   const [aiInsights, setAiInsights] = useState<Record<string, AiInsight>>({});
   const [aiBusy, setAiBusy] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [emailToken, setEmailToken] = useState("");
+  const [orgName, setOrgName] = useState("");
+  const [orgType, setOrgType] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
 
   const requestCsrf = useCallback(async () => {
     const r = await fetch(`${API}/api/v1/auth/csrf`, {
@@ -264,6 +276,92 @@ export default function Workspace() {
 
   const canReview =
     currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer";
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/profile`, { method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ full_name: profileName.trim() }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Profile update failed");
+      await loadIdentity(); setMessage("Your name has been updated.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Profile update failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function changePassword(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/password/change`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password change failed");
+      setCurrentPassword(""); setNewPassword(""); setMessage("Password changed. Other active sessions were revoked.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password change failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestEmailChange(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/email/change/request`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ new_email: newEmail, current_password: emailCurrentPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Email verification request failed");
+      setMessage("Verification sent to the new address. Enter the one-time token below.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Email change failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function confirmEmailChange(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const r = await fetch(`${API}/api/v1/auth/email/change/confirm`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ token: emailToken }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Email confirmation failed");
+      setEmailToken(""); await loadIdentity(); setMessage("Email address changed successfully.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Email confirmation failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function saveOrganization(event: FormEvent) {
+    event.preventDefault(); if (!orgId) return; setBusy(true); setMessage("");
+    try {
+      const r = await apiFetch(`/api/v1/auth/organizations/${orgId}`, { method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: orgName.trim(), organization_type: orgType.trim() }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Organization update failed");
+      await loadIdentity(); setMessage("Organization details updated.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Organization update failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function requestPasswordReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const token = csrf || await requestCsrf();
+      const r = await fetch(`${API}/api/v1/auth/password/forgot`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+        body: JSON.stringify({ email: forgotEmail }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password reset request failed");
+      setMessage("If that account exists, a password-reset email has been sent.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password reset request failed"); }
+    finally { setBusy(false); }
+  }
+
+  async function completePasswordReset(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const token = csrf || await requestCsrf();
+      const r = await fetch(`${API}/api/v1/auth/password/reset`, { method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+        body: JSON.stringify({ token: resetToken, new_password: resetPassword }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Password reset failed");
+      setResetToken(""); setResetPassword(""); setMessage("Password reset. You can now sign in.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Password reset failed"); }
+    finally { setBusy(false); }
+  }
 
   async function signIn(event: FormEvent) {
     event.preventDefault();
@@ -592,6 +690,19 @@ export default function Workspace() {
           </section>
 
           <section className="card">
+            <h2>Forgot password</h2>
+            <form className="stack" onSubmit={requestPasswordReset}>
+              <label>Email<input type="email" required value={forgotEmail} onChange={(e) => setForgotEmail(e.target.value)} /></label>
+              <button className="button-secondary" disabled={busy}>Send reset email</button>
+            </form>
+            <form className="stack" onSubmit={completePasswordReset}>
+              <label>Reset token<input required value={resetToken} onChange={(e) => setResetToken(e.target.value)} /></label>
+              <label>New password<input type="password" minLength={12} required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} /></label>
+              <button disabled={busy}>Reset password</button>
+            </form>
+          </section>
+
+          <section className="card">
             <h2>Accept an invitation</h2>
             <p className="muted">
               Enter the single-use invitation token provided by your
@@ -708,6 +819,43 @@ export default function Workspace() {
           Refresh data
         </button>
       </div>
+
+      <section className="card section">
+        <h2>Account settings</h2>
+        <div className="auth-grid">
+          <form className="stack" onSubmit={saveProfile}>
+            <h3>Personal information</h3>
+            <label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label>
+            <button disabled={busy}>Save name</button>
+          </form>
+          <form className="stack" onSubmit={changePassword}>
+            <h3>Change password</h3>
+            <label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
+            <label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label>
+            <button disabled={busy}>Change password</button>
+          </form>
+          <form className="stack" onSubmit={requestEmailChange}>
+            <h3>Change email</h3>
+            <p className="muted">A verification token will be sent to the new address.</p>
+            <label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
+            <label>Confirm with current password<input type="password" required value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label>
+            <button className="button-secondary" disabled={busy}>Send verification</button>
+          </form>
+          <form className="stack" onSubmit={confirmEmailChange}>
+            <h3>Confirm new email</h3>
+            <label>Email verification token<input required value={emailToken} onChange={(e) => setEmailToken(e.target.value)} /></label>
+            <button disabled={busy}>Confirm email change</button>
+          </form>
+        </div>
+        {currentOrg?.role === "org_admin" && (
+          <form className="stack section" onSubmit={saveOrganization}>
+            <h3>Organization settings</h3>
+            <label>Organization name<input required minLength={2} value={orgName || currentOrg.name} onChange={(e) => setOrgName(e.target.value)} /></label>
+            <label>Organization type<input required minLength={2} maxLength={80} value={orgType || currentOrg.organization_type} onChange={(e) => setOrgType(e.target.value)} /></label>
+            <button disabled={busy}>Save organization details</button>
+          </form>
+        )}
+      </section>
 
       <div className="notice">
         Synthetic demonstration environment. Signals are not diagnoses,
