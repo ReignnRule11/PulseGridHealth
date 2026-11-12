@@ -263,7 +263,7 @@ def me(identity: dict = Depends(get_identity), db: Session = Depends(get_db)):
     for membership in memberships:
         organization = db.get(Organization, membership.organization_id)
         if organization:
-            organizations.append({"id": str(organization.id), "name": organization.name, "role": membership.role})
+            organizations.append({"id": str(organization.id), "name": organization.name, "organization_type": organization.organization_type, "role": membership.role})
     return {"id": str(user.id), "email": user.email, "full_name": user.full_name,
             "organizations": organizations, "session_expires_at": identity["session"].expires_at.isoformat()}
 
