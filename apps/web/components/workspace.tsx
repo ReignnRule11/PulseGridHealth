@@ -365,6 +365,10 @@ export default function Workspace() {
   }, [pathname]);
 
   useEffect(() => {
+    if (me) setProfileName(me.full_name);
+  }, [me?.id, me?.full_name]);
+
+  useEffect(() => {
     if (identityLoading) return;
     const protectedPaths = ["/workspace", "/settings", "/settings/profile", "/settings/security", "/settings/email", "/settings/organization", "/organization/access", "/verify-email-change"];
     if (protectedPaths.includes(pathname) && !me) router.replace("/login");
@@ -411,9 +415,14 @@ export default function Workspace() {
   async function saveProfile(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
+      const nextName = profileName.trim();
+      if (nextName.length < 2 || nextName.length > 160) {
+        throw new Error("Enter a name between 2 and 160 characters.");
+      }
+      if (!csrf) throw new Error("Security token unavailable. Refresh the page and try again.");
       const r = await fetch(`${API}/api/v1/auth/profile`, { method: "PATCH", credentials: "include",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        body: JSON.stringify({ full_name: profileName.trim() }) });
+        body: JSON.stringify({ full_name: nextName }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Profile update failed");
       await loadIdentity(); setMessage("Your name has been updated.");
     } catch (e) { setMessage(e instanceof Error ? e.message : "Profile update failed"); }
@@ -976,7 +985,7 @@ export default function Workspace() {
         </nav>
         {settingsPath === "/settings/profile" && <section className="card section settings-panel">
           <h2>Personal information</h2><p className="muted">Update the name displayed on your account. Additional profile fields can be added when supported by the account profile model.</p>
-          <form className="stack settings-form" onSubmit={saveProfile}><label>Full name<input required minLength={2} value={profileName || me.full_name} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save personal information</button></form>
+          <form className="stack settings-form" onSubmit={saveProfile}><label>Full name<input aria-label="Full name" autoComplete="name" required minLength={2} maxLength={160} value={profileName} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save personal information</button></form>
         </section>}
         {settingsPath === "/settings/security" && <section className="card section settings-panel">
           <h2>Change password</h2><p className="muted">Use a strong password that you do not reuse on other services. Other active sessions are revoked after a successful change.</p>
