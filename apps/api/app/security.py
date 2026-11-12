@@ -185,15 +185,34 @@ def bootstrap(payload: BootstrapIn, request: Request, response: Response,
         db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"),
                    {"lock_key": 0x50554C5345424F4F})
 
-    # Bootstrap is only for the first organization and its first org_admin.
-    # Additional users must enter through an administrator-issued invitation.
-    if db.scalar(select(User.id).limit(1)) or db.scalar(select(Organization.id).limit(1)):
+    # Bootstrap is only for the first administrator. A single empty local-demo
+    # organization may be promoted in place; unrelated or partially initialized
+    # installations remain blocked.
+    if db.scalar(select(User.id).limit(1)):
         db.rollback()
         raise HTTPException(status_code=409, detail="bootstrap_already_completed")
 
+    existing_organizations = db.scalars(select(Organization)).all()
+    if existing_organizations:
+        if (
+            len(existing_organizations) != 1
+            or existing_organizations[0].name != "PulseGrid Demonstration"
+            or existing_organizations[0].organization_type != "demo"
+            or db.scalar(select(OrganizationMembership.id).limit(1))
+            or db.scalar(select(OrganizationInvitation.id).limit(1))
+        ):
+            db.rollback()
+            raise HTTPException(status_code=409, detail="bootstrap_already_completed")
+        organization = existing_organizations[0]
+        organization.name = payload.organization_name.strip()
+        organization.organization_type = payload.organization_type.strip()
+    else:
+        organization = Organization(
+            name=payload.organization_name.strip(),
+            organization_type=payload.organization_type.strip(),
+        )
+
     email = payload.admin_email.strip().lower()
-    organization = Organization(name=payload.organization_name.strip(),
-                                 organization_type=payload.organization_type.strip())
     user = User(email=email, full_name=payload.admin_name.strip(),
                 password_hash=_hash_password(payload.password))
     try:
