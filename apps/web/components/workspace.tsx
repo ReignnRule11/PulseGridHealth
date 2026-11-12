@@ -940,7 +940,7 @@ export default function Workspace() {
             POPULATION &amp; WORKFORCE HEALTH INTELLIGENCE
           </p>
           <h1>PulseGrid Health</h1>
-          <p className="muted">{workspaceHeading}</p>
+          <h2 className="workspace-role-heading">{workspaceHeading}</h2>
           <p className="muted">{workspaceDescription}</p>
         </div>
 
