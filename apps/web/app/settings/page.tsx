@@ -1,3 +1,5 @@
-import Workspace from "../../components/workspace";
+import { redirect } from "next/navigation";
 
-export default function SettingsPage() { return <Workspace />; }
+export default function SettingsIndexPage() {
+  redirect("/settings/profile");
+}
