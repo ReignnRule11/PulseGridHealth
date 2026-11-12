@@ -78,14 +78,15 @@ async function seedSecondOrganization(email: string, organizationName: string) {
 }
 
 async function signIn(page: Page, email: string, password: string) {
-  await page.goto("/");
-  await page.locator("section").filter({ hasText: "Sign inUse your organization" }).getByLabel("Email").fill(email);
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in securely" }).click();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
 }
 
 async function invite(page: Page, email: string, role: "reviewer" | "viewer") {
+  await page.goto("/organization/access");
   await page.getByLabel("Colleague email").fill(email);
   await page.getByLabel("Role").selectOption(role);
   await page.getByRole("button", { name: "Create invitation" }).click();
@@ -93,12 +94,37 @@ async function invite(page: Page, email: string, role: "reviewer" | "viewer") {
 }
 
 async function acceptInvite(page: Page, token: string, name: string, password: string) {
+  await page.goto("/invite");
   await page.getByLabel("Invitation token").fill(token);
   await page.getByLabel("Full name").fill(name);
   await page.getByLabel("Create password").fill(password);
   await page.getByRole("button", { name: "Accept invitation" }).click();
   await expect(page.getByText(/Invitation accepted/)).toBeVisible();
 }
+
+test("public, authentication and recovery screens have separate routes", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: /See emerging health signals/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in securely" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
+
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Sign in securely" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Forgot password" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Forgot your password?" })).toBeVisible();
+
+  await page.goto("/forgot-password");
+  await expect(page.getByRole("heading", { name: "Request a reset token" })).toBeVisible();
+  await expect(page.getByLabel("Reset token")).toHaveCount(0);
+
+  await page.goto("/reset-password");
+  await expect(page.getByRole("heading", { name: "Complete password reset" })).toBeVisible();
+  await expect(page.getByLabel("Reset token")).toBeVisible();
+
+  await page.goto("/invite");
+  await expect(page.getByRole("heading", { name: "Accept invitation" })).toBeVisible();
+  await expect(page.getByLabel("Invitation token")).toBeVisible();
+});
 
 test("authenticated workspace enforces ingestion, review, role and tenant boundaries", async ({ page, browser }, testInfo) => {
   // Retries share the same PostgreSQL service, so isolate each attempt from partial setup.
@@ -110,6 +136,15 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   const organizationId = await bootstrap(page.context().request, adminEmail, `PulseGrid E2E Authority ${suffix}`);
 
   await signIn(page, adminEmail, ADMIN_PASSWORD);
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByRole("heading", { name: "Account settings" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Organization access" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Account settings" }).click();
+  await expect(page.getByRole("heading", { name: "Account settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Change password" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Change email" })).toBeVisible();
+  await page.getByRole("link", { name: "Workspace", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Account settings" })).toHaveCount(0);
   const csv = [
     "domain,group_code,source_code,observed_date,indicator,value,denominator,unit",
     ...[10,11,9,10,11,10,9,35].map((value, index) =>
