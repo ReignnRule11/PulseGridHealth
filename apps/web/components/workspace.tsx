@@ -587,6 +587,7 @@ export default function Workspace() {
 
       setInviteToken(d.invitation_token);
       setInviteEmail("");
+      await loadOrganizationAccess();
 
       setMessage(
         "Invitation created. Deliver the token to the intended recipient through a secure channel; email delivery is not configured."
