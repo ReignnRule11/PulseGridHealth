@@ -184,3 +184,74 @@ def test_organization_data_isolation_and_membership_enforcement(auth_client):
     assert dashboard.json()["pending_alerts"] == 0
     denied = client.get("/api/v1/dashboard", headers={"X-Organization-ID": first_org})
     assert denied.status_code == 403
+
+
+def test_account_profile_password_and_organization_updates(auth_client):
+    client = auth_client
+    assert _bootstrap(client).status_code == 200
+    login = _login(client)
+    assert login.status_code == 200
+    organization_id = login.json()["organizations"][0]["id"]
+    csrf = client.cookies.get("pulsegrid_csrf")
+
+    profile = client.patch("/api/v1/auth/profile",
+        headers={"X-CSRF-Token": csrf},
+        json={"full_name": "Updated Administrator"})
+    assert profile.status_code == 200
+    assert profile.json()["full_name"] == "Updated Administrator"
+
+    changed = client.post("/api/v1/auth/password/change",
+        headers={"X-CSRF-Token": csrf},
+        json={"current_password": "Strong-Password-2026!",
+              "new_password": "New-Strong-Password-2026!"})
+    assert changed.status_code == 200
+    assert _login(client, password="New-Strong-Password-2026!").status_code == 200
+
+    csrf = client.cookies.get("pulsegrid_csrf")
+    organization = client.patch(f"/api/v1/auth/organizations/{organization_id}",
+        headers={"X-CSRF-Token": csrf, "X-Organization-ID": organization_id},
+        json={"name": "PulseGrid Health", "organization_type": "Health Intelligence & Analytics"})
+    assert organization.status_code == 200
+    assert organization.json()["name"] == "PulseGrid Health"
+
+
+def test_email_change_requires_confirmation(auth_client, monkeypatch):
+    from app.models import AccountActionToken
+    sent = []
+    monkeypatch.setattr("app.security._send_account_email",
+        lambda recipient, subject, body: sent.append((recipient, body)))
+    client = auth_client
+    assert _bootstrap(client).status_code == 200
+    assert _login(client).status_code == 200
+    csrf = client.cookies.get("pulsegrid_csrf")
+    requested = client.post("/api/v1/auth/email/change/request",
+        headers={"X-CSRF-Token": csrf},
+        json={"new_email": "new-admin@example.org",
+              "current_password": "Strong-Password-2026!"})
+    assert requested.status_code == 200
+    assert sent and sent[0][0] == "new-admin@example.org"
+    token = sent[0][1].split("\n\n")[1].split("\n")[0]
+    confirmed = client.post("/api/v1/auth/email/change/confirm",
+        headers={"X-CSRF-Token": client.cookies.get("pulsegrid_csrf")},
+        json={"token": token})
+    assert confirmed.status_code == 200
+    assert confirmed.json()["email"] == "new-admin@example.org"
+
+
+def test_password_reset_uses_one_time_email_token(auth_client, monkeypatch):
+    sent = []
+    monkeypatch.setattr("app.security._send_account_email",
+        lambda recipient, subject, body: sent.append((recipient, body)))
+    client = auth_client
+    assert _bootstrap(client).status_code == 200
+    csrf = _csrf(client)
+    requested = client.post("/api/v1/auth/password/forgot",
+        headers={"X-CSRF-Token": csrf}, json={"email": "admin@example.org"})
+    assert requested.status_code == 200
+    assert sent and sent[0][0] == "admin@example.org"
+    token = sent[0][1].split("\n\n")[1].split("\n")[0]
+    reset = client.post("/api/v1/auth/password/reset",
+        headers={"X-CSRF-Token": _csrf(client)},
+        json={"token": token, "new_password": "Reset-Strong-Password-2026!"})
+    assert reset.status_code == 200
+    assert _login(client, password="Reset-Strong-Password-2026!").status_code == 200
