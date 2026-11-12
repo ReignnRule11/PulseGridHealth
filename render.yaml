@@ -18,7 +18,9 @@ services:
     # Move migrations to a dedicated release step before paid/multi-instance use.
     startCommand: alembic upgrade head && python scripts/verify_runtime_role.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-access-log
     healthCheckPath: /health
-    autoDeployTrigger: 'checksPass'
+    # Deploy each commit reaching Maddie main. Maddie main is updated only by
+    # the sync workflow after changes have reached Reign main.
+    autoDeployTrigger: 'commit'
     envVars:
       - key: DATABASE_URL
         sync: false
