@@ -18,7 +18,7 @@ app.include_router(ai_router)
 origins = [x.strip() for x in settings.cors_origins.split(",") if x.strip()]
 app.add_middleware(
     CORSMiddleware, allow_origins=origins, allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Organization-ID", "X-Bootstrap-Token"],
 )
 
