@@ -139,12 +139,19 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByRole("heading", { name: "Account settings" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Organization access" })).toHaveCount(0);
-  await page.getByRole("link", { name: "Account settings" }).click();
-  await expect(page.getByRole("heading", { name: "Account settings" })).toBeVisible();
+  await page.getByRole("link", { name: "Personal settings" }).click();
+  await expect(page).toHaveURL(/\\/settings\\/profile$/);
+  await expect(page.getByRole("heading", { name: "Personal information" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Change password" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Security", exact: true }).click();
+  await expect(page).toHaveURL(/\\/settings\\/security$/);
   await expect(page.getByRole("heading", { name: "Change password" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Change email" })).toBeVisible();
+  await page.getByRole("link", { name: "Email", exact: true }).click();
+  await expect(page).toHaveURL(/\\/settings\\/email$/);
+  await expect(page.getByRole("heading", { name: "Change email address" })).toBeVisible();
   await page.getByRole("link", { name: "Workspace", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Account settings" })).toHaveCount(0);
+  await expect(page).toHaveURL(/\\/workspace$/);
+  await expect(page.getByRole("heading", { name: "Organization command center" })).toBeVisible();
   const csv = [
     "domain,group_code,source_code,observed_date,indicator,value,denominator,unit",
     ...[10,11,9,10,11,10,9,35].map((value, index) =>
