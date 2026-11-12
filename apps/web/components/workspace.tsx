@@ -1060,7 +1060,7 @@ export default function Workspace() {
           <form className="invite-form" onSubmit={createInvite}>
             <label>Colleague email<input type="email" required value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} /></label>
             <label>Role<select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-              <option value="analyst">Analyst — ingest data and run detection</option><option value="reviewer">Reviewer — investigate and resolve alerts</option><option value="viewer">Viewer — read-only access</option><option value="org_admin">Organization administrator</option>
+              <option value="analyst">Analyst — ingest data and run detection</option><option value="reviewer">Reviewer — investigate and resolve alerts</option><option value="viewer">Viewer — read-only access</option>
             </select></label><button disabled={busy}>Create invitation</button>
           </form>
           {inviteToken && <div className="token-panel"><strong>One-time invitation token</strong><code>{inviteToken}</code><button className="button-secondary" onClick={() => navigator.clipboard?.writeText(inviteToken)}>Copy token</button></div>}
@@ -1071,9 +1071,9 @@ export default function Workspace() {
             <div className="table-wrap"><table><thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Membership</th><th>Joined</th><th>Actions</th></tr></thead><tbody>
               {accessMembers.map((member) => <tr key={member.user_id}>
                 <td><strong>{member.full_name}</strong>{member.user_id === me.id ? <small> You</small> : null}</td><td>{member.email}</td>
-                <td>{member.user_id === me.id ? roleNames[member.role] : <select aria-label={`Role for ${member.email}`} value={memberRoleDrafts[member.user_id] ?? member.role} onChange={(e) => setMemberRoleDrafts((current) => ({ ...current, [member.user_id]: e.target.value }))}><option value="org_admin">Organization administrator</option><option value="analyst">Analyst</option><option value="reviewer">Reviewer</option><option value="viewer">Read-only viewer</option></select>}</td>
+                <td>{member.is_primary_admin ? <strong>Primary organization administrator</strong> : <select aria-label={`Role for ${member.email}`} value={memberRoleDrafts[member.user_id] ?? member.role} onChange={(e) => setMemberRoleDrafts((current) => ({ ...current, [member.user_id]: e.target.value }))}>{member.role === "org_admin" && <option value="org_admin" disabled>Organization administrator (existing)</option>}<option value="analyst">Analyst</option><option value="reviewer">Reviewer</option><option value="viewer">Read-only viewer</option></select>}</td>
                 <td>{member.is_active && member.account_active ? "Active" : "Deactivated"}</td><td>{formatDate(member.joined_at)}</td>
-                <td>{member.user_id === me.id ? <span className="muted">Current administrator</span> : <div className="member-actions"><button className="button-secondary" disabled={busy || (memberRoleDrafts[member.user_id] ?? member.role) === member.role} onClick={() => updateMember(member.user_id, { role: memberRoleDrafts[member.user_id] ?? member.role })}>Save role</button><button className="button-secondary" disabled={busy || !member.account_active} onClick={() => updateMember(member.user_id, { is_active: !member.is_active })}>{member.is_active ? "Deactivate" : "Reactivate"}</button></div>}</td>
+                <td>{member.is_primary_admin ? <span className="muted">Protected primary account</span> : <div className="member-actions"><button className="button-secondary" disabled={busy || (memberRoleDrafts[member.user_id] ?? member.role) === member.role} onClick={() => updateMember(member.user_id, { role: memberRoleDrafts[member.user_id] ?? member.role })}>Save role</button><button className="button-secondary" disabled={busy || !member.account_active} onClick={() => updateMember(member.user_id, { is_active: !member.is_active })}>{member.is_active ? "Deactivate" : "Reactivate"}</button></div>}</td>
               </tr>)}
             </tbody></table></div>
           )}
