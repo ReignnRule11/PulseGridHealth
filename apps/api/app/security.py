@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -378,7 +378,7 @@ def update_organization_member(organization_id: UUID, user_id: UUID,
     next_active = payload.is_active if payload.is_active is not None else membership.is_active
 
     if membership.role == "org_admin" and membership.is_active and (next_role != "org_admin" or not next_active):
-        active_admins = db.scalar(select(__import__("sqlalchemy").func.count()).select_from(OrganizationMembership).where(
+        active_admins = db.scalar(select(func.count()).select_from(OrganizationMembership).where(
             OrganizationMembership.organization_id == organization_id,
             OrganizationMembership.role == "org_admin",
             OrganizationMembership.is_active.is_(True),
