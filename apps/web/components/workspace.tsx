@@ -380,6 +380,13 @@ export default function Workspace() {
     if (me && orgId) loadWorkspace();
   }, [me, orgId, loadWorkspace]);
 
+  useEffect(() => {
+    if (!me || !orgId) return;
+    const refreshId = window.setInterval(() => { void loadWorkspace(); }, 30_000);
+    return () => window.clearInterval(refreshId);
+  }, [me, orgId, loadWorkspace]);
+
+
   const currentOrg = useMemo(
     () => me?.organizations.find((o) => o.id === orgId) ?? null,
     [me, orgId]
@@ -1116,7 +1123,7 @@ export default function Workspace() {
       <section className="card section" aria-label="Notifications">
         <div className="section-heading">
           <div><h2>Notifications {unreadNotifications > 0 ? `(${unreadNotifications} unread)` : ""}</h2>
-            <p className="muted">Upload activity, new candidate alerts and review assignments for this organization.</p></div>
+            <p className="muted">Upload activity, new candidate alerts and review assignments. Updates automatically every 30 seconds while this workspace is open.</p></div>
           <button className="button-secondary" onClick={loadWorkspace} disabled={busy}>Refresh notifications</button>
         </div>
         {notifications.length === 0 ? <p className="muted">You&apos;re up to date. No notifications yet.</p> : <div className="review-list">
