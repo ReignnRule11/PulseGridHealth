@@ -181,3 +181,49 @@ th { color:#718096; font-weight:700; }
   .section-heading { flex-direction:column; }
   .member-actions { min-width:0; }
 }
+
+
+/* Accessible show/hide controls for password fields. */
+.password-field-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-field-wrap input {
+  width: 100%;
+  padding-right: 3.25rem;
+}
+
+.password-visibility-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.65rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0.4rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--muted, #64748b);
+  cursor: pointer;
+}
+
+.password-visibility-toggle:hover {
+  background: rgba(100, 116, 139, 0.12);
+  color: inherit;
+}
+
+.password-visibility-toggle:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.password-visibility-toggle svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
