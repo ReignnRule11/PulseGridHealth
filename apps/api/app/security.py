@@ -313,10 +313,11 @@ def organization_access(organization_id: UUID,
         .where(OrganizationMembership.organization_id == organization_id)
         .order_by(OrganizationMembership.created_at.asc(), User.email.asc())
     ).all()
+    primary_admin_id = _primary_admin_user_id(db, organization_id)
     members = [{
         "user_id": str(user.id),
         "membership_id": str(membership.id),
-        "is_primary_admin": user.id == _primary_admin_user_id(db, organization_id),
+        "is_primary_admin": user.id == primary_admin_id,
         "full_name": user.full_name,
         "email": user.email,
         "role": membership.role,
