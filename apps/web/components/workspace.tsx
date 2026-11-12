@@ -181,6 +181,7 @@ export default function Workspace() {
   const [historyBusy, setHistoryBusy] = useState("");
   const [aiInsights, setAiInsights] = useState<Record<string, AiInsight>>({});
   const [aiBusy, setAiBusy] = useState("");
+  const [profileName, setProfileName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [emailCurrentPassword, setEmailCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -364,6 +365,10 @@ export default function Workspace() {
   }, [pathname]);
 
   useEffect(() => {
+    if (me) setProfileName(me.full_name);
+  }, [me?.id, me?.full_name]);
+
+  useEffect(() => {
     if (identityLoading) return;
     const protectedPaths = ["/workspace", "/settings", "/settings/profile", "/settings/security", "/settings/email", "/settings/organization", "/organization/access", "/verify-email-change"];
     if (protectedPaths.includes(pathname) && !me) router.replace("/login");
@@ -397,7 +402,8 @@ export default function Workspace() {
   const canReview =
     currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer";
 
-  const accountDisplayName = currentOrg?.role === "org_admin" ? "PulseGrid Health" : me?.full_name ?? "";
+  const isAdminAccount = me?.organizations.some((organization) => organization.role === "org_admin") ?? false;
+  const accountDisplayName = isAdminAccount ? "PulseGrid Health" : me?.full_name ?? "";
 
   const workspaceMode = currentOrg?.role ?? "viewer";
   const workspaceHeading = workspaceMode === "org_admin" ? "Organization command center"
@@ -408,6 +414,21 @@ export default function Workspace() {
     : workspaceMode === "analyst" ? "Import authorized aggregate observations, inspect trends and prepare evidence for review."
     : workspaceMode === "reviewer" ? "Review candidate signals, document findings and track evidence-led decisions."
     : "Explore approved organization observations, candidate signals and published review outcomes.";
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setMessage("");
+    try {
+      const nextName = profileName.trim();
+      if (nextName.length < 2 || nextName.length > 160) throw new Error("Enter a name between 2 and 160 characters.");
+      if (!csrf) throw new Error("Security token unavailable. Refresh the page and try again.");
+      const r = await fetch(`${API}/api/v1/auth/profile`, { method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify({ full_name: nextName }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Profile update failed");
+      await loadIdentity(); setMessage("Your name has been updated.");
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Profile update failed"); }
+    finally { setBusy(false); }
+  }
 
   async function changePassword(event: FormEvent) {
     event.preventDefault(); setBusy(true); setMessage("");
@@ -963,10 +984,13 @@ export default function Workspace() {
           {currentOrg?.role === "org_admin" && <Link href="/settings/organization" aria-current={isOrganizationSettings ? "page" : undefined}>Organization</Link>}
           {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
         </nav>
-        {settingsPath === "/settings/profile" && <section className="card section settings-panel">
+        {settingsPath === "/settings/profile" && {isAdminAccount ? <section className="card section settings-panel">
           <h2>Account display name</h2><p className="muted">This administrator account is identified as PulseGrid Health. The display name is fixed and cannot be edited. You can still change the account email address and password using the separate settings pages.</p>
           <div className="settings-form"><label>Display name<input aria-label="Display name" value="PulseGrid Health" readOnly disabled /></label></div>
-        </section>}
+        </section> : <section className="card section settings-panel">
+          <h2>Personal information</h2><p className="muted">Update the name displayed on your account.</p>
+          <form className="stack settings-form" onSubmit={saveProfile}><label>Full name<input aria-label="Full name" autoComplete="name" required minLength={2} maxLength={160} value={profileName} onChange={(e) => setProfileName(e.target.value)} /></label><button disabled={busy}>Save personal information</button></form>
+        </section>}}
         {settingsPath === "/settings/security" && <section className="card section settings-panel">
           <h2>Change password</h2><p className="muted">Use a strong password that you do not reuse on other services. Other active sessions are revoked after a successful change.</p>
           <form className="stack settings-form" onSubmit={changePassword}><label>Current password<input type="password" required autoComplete="current-password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label><label>New password<input type="password" required minLength={12} autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} /></label><button disabled={busy}>Change password</button></form>
