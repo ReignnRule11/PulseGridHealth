@@ -295,7 +295,7 @@ export default function Workspace() {
     try {
       const r = await fetch(`${API}/api/v1/auth/email/change/request`, { method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-        body: JSON.stringify({ new_email: newEmail, current_password: currentPassword }) });
+        body: JSON.stringify({ new_email: newEmail, current_password: emailCurrentPassword }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.detail ?? "Email verification request failed");
       setMessage("Verification sent to the new address. Enter the one-time token below.");
     } catch (e) { setMessage(e instanceof Error ? e.message : "Email change failed"); }
@@ -827,7 +827,7 @@ export default function Workspace() {
             <h3>Change email</h3>
             <p className="muted">A verification token will be sent to the new address.</p>
             <label>New email<input type="email" required value={newEmail} onChange={(e) => setNewEmail(e.target.value)} /></label>
-            <label>Confirm with current password<input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} /></label>
+            <label>Confirm with current password<input type="password" required value={emailCurrentPassword} onChange={(e) => setEmailCurrentPassword(e.target.value)} /></label>
             <button className="button-secondary" disabled={busy}>Send verification</button>
           </form>
           <form className="stack" onSubmit={confirmEmailChange}>
