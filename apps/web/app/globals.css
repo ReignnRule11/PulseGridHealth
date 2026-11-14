@@ -232,3 +232,82 @@ th { color:#718096; font-weight:700; }
   width: 1.2rem;
   height: 1.2rem;
 }
+
+
+/* Responsive and touch-friendly defaults */
+html { min-width: 320px; scroll-padding-top: 16px; }
+body { min-width: 320px; overflow-x: hidden; }
+main { width: 100%; }
+button, input, select, textarea { min-height: 44px; }
+button { touch-action: manipulation; }
+a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #278579; outline-offset: 2px; }
+.table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap table { min-width: 620px; }
+.card, .review-card, .token-panel, .workspace-bar, .landing-bottom { min-width: 0; }
+.metric, .status-message, .history-view, code { overflow-wrap: anywhere; }
+.pwa-install-button {
+  position: fixed;
+  z-index: 1000;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  min-height: 46px;
+  padding: 12px 17px;
+  border: 1px solid #0e5752;
+  border-radius: 999px;
+  background: #176b65;
+  color: #fff;
+  box-shadow: 0 8px 24px #102f2c35;
+}
+.offline-page {
+  max-width: 560px;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+}
+.offline-page h1 { margin: 0; }
+.offline-page p:not(.eyebrow) { max-width: 480px; color: #68788c; }
+.offline-page a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #176b65;
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+.offline-mark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #dff4ef;
+  color: #12665f;
+  font-size: 27px;
+  font-weight: 800;
+}
+@media (max-width: 680px) {
+  main { padding-left: max(13px, env(safe-area-inset-left)); padding-right: max(13px, env(safe-area-inset-right)); }
+  .card { padding: 17px; }
+  .metric { font-size: clamp(25px, 8vw, 30px); }
+  .workspace-nav { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; }
+  .workspace-nav a { flex: 0 0 auto; white-space: nowrap; }
+  .review-form button, .settings-form button { width: 100%; }
+  .upload label { min-width: 0; width: 100%; }
+  .landing-header nav { flex-wrap: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
