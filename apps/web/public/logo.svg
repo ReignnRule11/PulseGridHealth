@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" role="img" aria-labelledby="title desc">
+  <title id="title">PulseGrid Health</title>
+  <desc id="desc">A connected health signal grid symbol beside the PulseGrid Health wordmark.</desc>
+  <defs><linearGradient id="pulse" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#4f8df7"/></linearGradient></defs>
+  <g transform="translate(8 8)">
+    <rect width="144" height="144" rx="34" fill="#102a43"/>
+    <g fill="#2dd4bf" opacity=".9">
+      <circle cx="34" cy="38" r="5"/><circle cx="110" cy="38" r="5"/><circle cx="34" cy="106" r="5"/><circle cx="110" cy="106" r="5"/>
+    </g>
+    <path d="M34 38H110M34 106H110M34 38V106M110 38V106" fill="none" stroke="#5b7890" stroke-width="3" opacity=".65"/>
+    <path d="M20 76h27l13-25 20 51 14-28h30" fill="none" stroke="url(#pulse)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="178" y="77" fill="#102a43" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="750" letter-spacing="-1.8">PulseGrid</text>
+  <text x="180" y="112" fill="#527086" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="650" letter-spacing="4.2">HEALTH</text>
+</svg>
