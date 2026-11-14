@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function OfflinePage() {
   return (
     <main
@@ -23,7 +25,7 @@ export default function OfflinePage() {
         workspace. For your security, private workspace data is not stored for
         offline access.
       </p>
-      <a href="/" style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: "10px 16px", borderRadius: 8, background: "#176b65", color: "#fff", fontWeight: 700, textDecoration: "none" }}>Try again</a>
+      <Link href="/" style={{ display: "inline-flex", alignItems: "center", minHeight: 44, padding: "10px 16px", borderRadius: 8, background: "#176b65", color: "#fff", fontWeight: 700, textDecoration: "none" }}>Try again</Link>
     </main>
   );
 }
