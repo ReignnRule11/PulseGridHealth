@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/icon.svg"],
+    apple: [{ url: "/icon.svg", type: "image/svg+xml" }],
   },
   appleWebApp: {
     capable: true,
@@ -21,7 +23,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#176b65",
+  themeColor: "#102a43",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
