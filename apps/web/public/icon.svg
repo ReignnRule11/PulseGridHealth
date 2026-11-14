@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#176b65"/>
-  <circle cx="256" cy="256" r="156" fill="#ffffff" opacity=".12"/>
-  <path d="M82 264h88l39-93 68 171 43-96h110" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="82" cy="264" r="17" fill="#b8eee0"/>
-  <circle cx="430" cy="246" r="17" fill="#b8eee0"/>
+  <defs><linearGradient id="pulse" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#4f8df7"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="#102a43"/>
+  <g fill="#2dd4bf"><circle cx="120" cy="120" r="18"/><circle cx="392" cy="120" r="18"/><circle cx="120" cy="392" r="18"/><circle cx="392" cy="392" r="18"/></g>
+  <path d="M120 120H392M120 392H392M120 120V392M392 120V392" fill="none" stroke="#5b7890" stroke-width="13" opacity=".65"/>
+  <path d="M66 260h95l48-91 73 185 51-94h113" fill="none" stroke="url(#pulse)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
