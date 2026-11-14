@@ -855,7 +855,7 @@ export default function Workspace() {
     return (
       <main className="landing-shell">
         <header className="landing-header">
-          <Link href="/" className="landing-brand"><span className="brand-mark">P</span><span>PulseGrid Health</span></Link>
+          <Link href="/" className="landing-brand"><span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 144 144" focusable="false"><rect width="144" height="144" rx="34" fill="#102a43"/><g fill="#2dd4bf"><circle cx="34" cy="38" r="5"/><circle cx="110" cy="38" r="5"/><circle cx="34" cy="106" r="5"/><circle cx="110" cy="106" r="5"/></g><path d="M34 38H110M34 106H110M34 38V106M110 38V106" fill="none" stroke="#5b7890" strokeWidth="3" opacity=".65"/><path d="M20 76h27l13-25 20 51 14-28h30" fill="none" stroke="#2dd4bf" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/></svg></span><span>PulseGrid Health</span></Link>
           <nav aria-label="Main navigation">
             <a href="#platform">Platform</a>
             <a href="#how-it-works">How it works</a>
