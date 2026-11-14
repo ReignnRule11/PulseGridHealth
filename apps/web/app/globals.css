@@ -80,6 +80,7 @@ th { color:#718096; font-weight:700; }
 .landing-header { max-width: 1280px; margin: 0 auto; min-height: 82px; display:flex; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid #e5edf0; }
 .landing-brand { display:flex; align-items:center; gap:11px; color:#17364c; font-weight:800; text-decoration:none; letter-spacing:-.3px; }
 .landing-brand .brand-mark { margin:0; width:39px; height:39px; border-radius:12px; font-size:22px; }
+.landing-brand .brand-mark svg { display:block; width:100%; height:100%; border-radius:inherit; }
 .landing-header nav { display:flex; align-items:center; gap:26px; }
 .landing-header nav a { color:#40576a; font-size:13px; font-weight:700; text-decoration:none; }
 .landing-header nav .button-secondary { padding:10px 16px; border:1px solid #dce7e9; border-radius:8px; }
