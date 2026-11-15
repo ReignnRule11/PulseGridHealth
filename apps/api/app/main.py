@@ -9,7 +9,8 @@ from app.security import router as security_router, get_request_tenant, enforce_
 from app.review import router as review_router
 from app.ai_intelligence import router as ai_router
 from app.activity import router as activity_router
-from app.services.ingestion import parse_csv
+from pathlib import Path
+from app.services.ingestion import parse_upload
 from app.services.detection import robust_anomaly
 
 app = FastAPI(title="PulseGrid Health API", version="0.4.0")
@@ -187,20 +188,28 @@ async def import_observations(file: UploadFile = File(...),
                               csrf: bool = Depends(require_tenant_csrf), db: Session = Depends(get_db)):
     enforce_roles(context, "org_admin", "analyst")
     org_id = context["organization_id"]
-    if file.content_type not in ("text/csv", "application/vnd.ms-excel", "application/octet-stream"):
-        raise HTTPException(status_code=415, detail="csv_only")
+    filename = file.filename or "observations.csv"
+    extension = Path(filename).suffix.lower()
+    allowed_extensions = {".csv", ".xls", ".xlsx"}
+    allowed_types = {
+        "text/csv", "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream",
+    }
+    if extension not in allowed_extensions or file.content_type not in allowed_types:
+        raise HTTPException(status_code=415, detail="unsupported_file_type: use .csv, .xls, or .xlsx")
     content = await file.read(settings.max_upload_mb * 1024 * 1024 + 1)
     batch = None
     if context.get("actor_user_id"):
         batch = DataImportBatch(
             organization_id=org_id, uploaded_by_user_id=context["actor_user_id"],
-            filename=(file.filename or "observations.csv")[:255],
+            filename=filename[:255],
             file_size_bytes=len(content), status="processing",
         )
         db.add(batch)
         db.flush()
     try:
-        rows, errors = parse_csv(content, settings.max_upload_mb * 1024 * 1024)
+        rows, errors = parse_upload(content, filename, settings.max_upload_mb * 1024 * 1024)
     except ValueError as exc:
         if batch:
             batch.status = "rejected"
