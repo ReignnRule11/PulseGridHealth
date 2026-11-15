@@ -84,7 +84,11 @@ type AlertItem = {
   value: number;
   unit: string;
   baseline: number | null;
+  mad: number | null;
   score: number | null;
+  threshold: number;
+  history_count: number;
+  reason: string;
   severity: string;
   status: string;
   explanation: string;
@@ -182,6 +186,57 @@ const roleNames: Record<string, string> = {
   reviewer: "Reviewer",
   viewer: "Read-only viewer",
 };
+
+type ReviewHistoryData = {
+  alert: { id: string; status: string; severity: string };
+  investigation: null | { status: string; findings: string | null; disposition: string | null; resolution_rationale: string | null; started_by: string; started_at: string; updated_at: string; closed_at: string | null };
+  response_actions: Array<{ id: string; action_type: string; description: string; owner_role: string | null; due_date: string | null; status: string; created_by: string; created_at: string }>;
+  audit_events: Array<{ event_type: string; actor: string; detail: Record<string, unknown>; created_at: string }>;
+};
+
+function ReviewHistoryView({ value }: { value: string }) {
+  let data: ReviewHistoryData;
+  try { data = JSON.parse(value) as ReviewHistoryData; }
+  catch { return <pre className="history-view">{value}</pre>; }
+  const dateLabel = (value: string) => new Date(value).toLocaleString();
+  return (
+    <div className="history-document">
+      <div className="history-document-heading">
+        <strong>Review record</strong>
+        <span>{data.alert.severity} priority · {data.alert.status.replaceAll("_", " ")}</span>
+      </div>
+      {data.investigation && <section>
+        <h3>Investigation</h3>
+        <p><strong>Status:</strong> {data.investigation.status.replaceAll("_", " ")}</p>
+        <p><strong>Started by:</strong> {data.investigation.started_by} · {dateLabel(data.investigation.started_at)}</p>
+        {data.investigation.findings && <p><strong>Findings:</strong> {data.investigation.findings}</p>}
+        {data.investigation.disposition && <p><strong>Disposition:</strong> {data.investigation.disposition}</p>}
+        {data.investigation.resolution_rationale && <p><strong>Resolution rationale:</strong> {data.investigation.resolution_rationale}</p>}
+        {data.investigation.closed_at && <p><strong>Closed:</strong> {dateLabel(data.investigation.closed_at)}</p>}
+      </section>}
+      <section>
+        <h3>Response actions ({data.response_actions.length})</h3>
+        {data.response_actions.length === 0 ? <p className="muted">No response actions recorded.</p> : data.response_actions.map(action => (
+          <article className="history-action" key={action.id}>
+            <div className="review-heading"><strong>{action.action_type.replaceAll("_", " ")}</strong><span>{action.status.replaceAll("_", " ")}</span></div>
+            <p>{action.description}</p>
+            <small>Owner: {action.owner_role ?? "Unassigned"} · Recorded by {action.created_by} · {dateLabel(action.created_at)}{action.due_date ? ` · Due ${action.due_date}` : ""}</small>
+          </article>
+        ))}
+      </section>
+      <section>
+        <h3>Audit timeline ({data.audit_events.length})</h3>
+        {data.audit_events.length === 0 ? <p className="muted">No audit events recorded.</p> : <ol className="history-timeline">
+          {data.audit_events.map((event, index) => <li key={index}>
+            <strong>{event.event_type.replaceAll(".", " ").replaceAll("_", " ")}</strong>
+            <p>{event.actor} · {dateLabel(event.created_at)}</p>
+            {Object.keys(event.detail ?? {}).length > 0 && <small>{Object.entries(event.detail).map(([key, item]) => `${key}: ${String(item)}`).join(" · ")}</small>}
+          </li>)}
+        </ol>}
+      </section>
+    </div>
+  );
+}
 
 export default function Workspace() {
   const pathname = usePathname() ?? "/";
@@ -1224,7 +1279,7 @@ export default function Workspace() {
 
           <form className="upload" onSubmit={importCsv}>
             <label>
-              Aggregate CSV dataset
+              Aggregate observations (.csv, .xls, .xlsx)
               <input
                 type="file"
                 accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1242,6 +1297,38 @@ export default function Workspace() {
           </form>
         </section>
       )}
+
+      <section className="card section" id="screening-results">
+        <div className="section-heading">
+          <div>
+            <h2>Statistical screening results</h2>
+            <p className="muted">Historical median and median absolute deviation (MAD) evidence for candidate signals. These are statistical flags for human review, not diagnoses or outbreak declarations.</p>
+          </div>
+        </div>
+        {alerts.length === 0 ? (
+          <p className="muted">No candidate signals are available yet. Import an authorised aggregate dataset with sufficient historical observations to populate screening results.</p>
+        ) : (
+          <div className="screening-grid">
+            {alerts.map((a) => (
+              <article className="screening-card" key={a.id}>
+                <div className="review-heading">
+                  <strong>{a.indicator} · {a.domain} / {a.group_code}</strong>
+                  <span className="pending">{a.reason.replaceAll("_", " ")}</span>
+                </div>
+                <div className="screening-metrics">
+                  <div><small>Observed value</small><strong>{a.value} {a.unit}</strong></div>
+                  <div><small>Historical median</small><strong>{a.baseline === null ? "Unavailable" : a.baseline.toFixed(2)}</strong></div>
+                  <div><small>Historical MAD</small><strong>{a.mad === null ? "Unavailable" : a.mad.toFixed(2)}</strong></div>
+                  <div><small>Robust score</small><strong>{a.score === null ? "Not calculable" : a.score.toFixed(2)}</strong></div>
+                  <div><small>Review threshold</small><strong>{a.threshold.toFixed(2)}</strong></div>
+                  <div><small>Historical points</small><strong>{a.history_count}</strong></div>
+                </div>
+                <p className="muted">Observed {a.observed_date}. {a.explanation}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="card section" id="review-inbox">
         <div className="section-heading">
@@ -1547,11 +1634,7 @@ export default function Workspace() {
                     : "View review history"}
                 </button>
 
-                {histories[a.id] && (
-                  <pre className="history-view">
-                    {histories[a.id]}
-                  </pre>
-                )}
+                {histories[a.id] && <ReviewHistoryView value={histories[a.id]} />}
               </article>
             ))}
           </div>

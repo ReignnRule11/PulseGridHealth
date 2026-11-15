@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from statistics import median
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -47,13 +48,30 @@ def reviewer_inbox(context: dict = Depends(get_request_tenant), db: Session = De
             if not group or not group.cohort_size or group.cohort_size < settings.min_workforce_cohort_size:
                 continue
             group_code, domain = group.location_code, "workforce"
+        group_filter = (HealthObservation.community_id == observation.community_id
+                        if observation.community_id else
+                        HealthObservation.workforce_group_id == observation.workforce_group_id)
+        history_values = db.scalars(
+            select(HealthObservation.value).where(
+                HealthObservation.organization_id == context["organization_id"],
+                group_filter,
+                HealthObservation.indicator == observation.indicator,
+                HealthObservation.observed_date < observation.observed_date,
+            ).order_by(HealthObservation.observed_date.desc()).limit(max(detection.history_count, 1))
+        ).all()
+        history_numbers = [float(value) for value in history_values]
+        mad = None
+        if detection.baseline is not None and history_numbers:
+            mad = float(median([abs(value - detection.baseline) for value in history_numbers]))
         items.append({
             "id": str(alert.id), "status": alert.status, "severity": alert.severity,
             "domain": domain, "group_code": group_code,
             "observed_date": observation.observed_date.isoformat(),
             "indicator": observation.indicator, "value": float(observation.value),
-            "unit": observation.unit, "baseline": detection.baseline,
-            "score": detection.anomaly_score, "explanation": alert.explanation,
+            "unit": observation.unit, "baseline": detection.baseline, "mad": mad,
+            "score": detection.anomaly_score, "threshold": detection.threshold,
+            "history_count": detection.history_count, "reason": detection.reason,
+            "explanation": alert.explanation,
             "assigned_to_user_id": str(alert.assigned_to_user_id) if alert.assigned_to_user_id else None,
             "assignee_name": assignee.full_name if assignee else None,
             "assignee_email": assignee.email if assignee else None,
@@ -227,10 +245,13 @@ def alert_history(alert_id: UUID, context: dict = Depends(get_request_tenant), d
         "alert": {"id": str(alert.id), "status": alert.status, "severity": alert.severity},
         "investigation": None if investigation is None else {
             "id": str(investigation.id), "status": investigation.status, "findings": investigation.findings,
-            "disposition": investigation.disposition, "resolution_rationale": investigation.resolution_rationale},
+            "disposition": investigation.disposition, "resolution_rationale": investigation.resolution_rationale,
+            "started_by": investigation.started_by, "started_at": investigation.started_at.isoformat(),
+            "updated_at": investigation.updated_at.isoformat(),
+            "closed_at": investigation.closed_at.isoformat() if investigation.closed_at else None},
         "response_actions": [{"id": str(a.id), "action_type": a.action_type, "description": a.description,
             "owner_role": a.owner_role, "due_date": a.due_date.isoformat() if a.due_date else None,
-            "status": a.status} for a in actions],
+            "status": a.status, "created_by": a.created_by, "created_at": a.created_at.isoformat()} for a in actions],
         "audit_events": [{"event_type": e.event_type, "actor": e.actor, "detail": e.detail,
             "created_at": e.created_at.isoformat()} for e in events],
     }
