@@ -84,7 +84,11 @@ type AlertItem = {
   value: number;
   unit: string;
   baseline: number | null;
+  mad: number | null;
   score: number | null;
+  threshold: number;
+  history_count: number;
+  reason: string;
   severity: string;
   status: string;
   explanation: string;
@@ -1224,7 +1228,7 @@ export default function Workspace() {
 
           <form className="upload" onSubmit={importCsv}>
             <label>
-              Aggregate CSV dataset
+              Aggregate observations (.csv, .xls, .xlsx)
               <input
                 type="file"
                 accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1242,6 +1246,38 @@ export default function Workspace() {
           </form>
         </section>
       )}
+
+      <section className="card section" id="screening-results">
+        <div className="section-heading">
+          <div>
+            <h2>Statistical screening results</h2>
+            <p className="muted">Historical median and median absolute deviation (MAD) evidence for candidate signals. These are statistical flags for human review, not diagnoses or outbreak declarations.</p>
+          </div>
+        </div>
+        {alerts.length === 0 ? (
+          <p className="muted">No candidate signals are available yet. Import an authorised aggregate dataset with sufficient historical observations to populate screening results.</p>
+        ) : (
+          <div className="screening-grid">
+            {alerts.map((a) => (
+              <article className="screening-card" key={a.id}>
+                <div className="review-heading">
+                  <strong>{a.indicator} · {a.domain} / {a.group_code}</strong>
+                  <span className="pending">{a.reason.replaceAll("_", " ")}</span>
+                </div>
+                <div className="screening-metrics">
+                  <div><small>Observed value</small><strong>{a.value} {a.unit}</strong></div>
+                  <div><small>Historical median</small><strong>{a.baseline === null ? "Unavailable" : a.baseline.toFixed(2)}</strong></div>
+                  <div><small>Historical MAD</small><strong>{a.mad === null ? "Unavailable" : a.mad.toFixed(2)}</strong></div>
+                  <div><small>Robust score</small><strong>{a.score === null ? "Not calculable" : a.score.toFixed(2)}</strong></div>
+                  <div><small>Review threshold</small><strong>{a.threshold.toFixed(2)}</strong></div>
+                  <div><small>Historical points</small><strong>{a.history_count}</strong></div>
+                </div>
+                <p className="muted">Observed {a.observed_date}. {a.explanation}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="card section" id="review-inbox">
         <div className="section-heading">
