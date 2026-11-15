@@ -312,3 +312,13 @@ a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* Explainable statistical screening evidence */
+.screening-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:13px; margin-top:15px; }
+.screening-card { min-width:0; padding:16px; border:1px solid #dce7ec; border-radius:11px; background:#fbfdfe; }
+.screening-card p { margin:12px 0 0; font-size:13px; }
+.screening-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:15px; }
+.screening-metrics div { min-width:0; padding:10px; border-radius:8px; background:#f0f5f7; }
+.screening-metrics small { display:block; color:#68788c; font-size:11px; }
+.screening-metrics strong { display:block; margin-top:5px; color:#173f52; font-size:15px; overflow-wrap:anywhere; }
