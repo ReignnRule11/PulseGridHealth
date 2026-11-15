@@ -720,8 +720,10 @@ export default function Workspace() {
         throw new Error(d.detail ?? "Import failed");
       }
 
+      const rowErrors = Array.isArray(d.errors) ? d.errors.slice(0, 8) : [];
       setMessage(
-        `Imported ${d.accepted}; duplicates ${d.duplicates}; rejected ${d.rejected}; candidate alerts created ${d.alerts_created}.`
+        `Import complete — accepted ${d.accepted}; duplicates ${d.duplicates}; rejected ${d.rejected}; candidate alerts created ${d.alerts_created}.` +
+        (rowErrors.length ? ` Details: ${rowErrors.join(" | ")}` : "")
       );
 
       setCsv(null);
@@ -1216,8 +1218,8 @@ export default function Workspace() {
         <section className="card section">
           <h2>Data ingestion</h2>
           <p className="muted">
-            Import authorized aggregate observations from a validated CSV
-            file.
+            Import authorized aggregate observations from CSV or Excel (.xls/.xlsx).
+            The first worksheet is read and checked against the required observation columns.
           </p>
 
           <form className="upload" onSubmit={importCsv}>
@@ -1225,15 +1227,17 @@ export default function Workspace() {
               Aggregate CSV dataset
               <input
                 type="file"
-                accept=".csv,text/csv"
-                onChange={(e) =>
-                  setCsv(e.target.files?.[0] ?? null)
-                }
+                accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={(e) => {
+                  const selected = e.target.files?.[0] ?? null;
+                  setCsv(selected);
+                  if (selected) setMessage(`Selected ${selected.name} (${(selected.size / 1024).toFixed(1)} KB). Ready to validate and import.`);
+                }}
               />
             </label>
 
             <button disabled={!csv || busy}>
-              {busy ? "Importing…" : "Import CSV"}
+              {busy ? "Importing…" : "Import dataset"}
             </button>
           </form>
         </section>

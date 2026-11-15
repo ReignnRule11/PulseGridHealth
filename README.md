@@ -38,7 +38,7 @@ It is designed as an early-warning and review-support layer. It is **not** an el
 
 The current implementation provides these connected capabilities:
 
-1. **Aggregate CSV ingestion** — accepts structured observations for community or workforce groups, validates the upload and individual rows, checks duplicates and persists accepted records.
+1. **Aggregate data ingestion** — accepts structured CSV, legacy Excel (`.xls`) and modern Excel (`.xlsx`) observations for community or workforce groups, validates the upload and individual rows, checks duplicates and persists accepted records.
 2. **Historical statistical screening** — compares each new observation with prior observations for the same organization, group and indicator using a median / median absolute deviation (MAD) method.
 3. **Evidence-backed candidate alerts** — stores detector output, including the baseline, score when calculable, history count, threshold, reason and detector version.
 4. **Human review and investigation** — supports acknowledgement, investigation creation, findings, response actions, resolution and review-history retrieval.
@@ -249,7 +249,7 @@ The runtime database role must be a restricted, non-superuser role without `BYPA
 
 ## Observation ingestion
 
-The API accepts UTF-8 CSV uploads using this exact column set:
+The API accepts UTF-8 CSV uploads and `.xls` / `.xlsx` workbooks using this exact column set. For workbooks, the first worksheet is imported. All formats pass through the same typed row validation:
 
 ```csv
 domain,group_code,source_code,observed_date,indicator,value,denominator,unit
@@ -269,9 +269,9 @@ workforce,W001,SYNTHETIC,2026-01-05,weekly_heat_related_symptom_reports,5,250,re
 | `unit` | Measurement unit |
 
 The current implementation:
-- Allows CSV media types `text/csv`, `application/vnd.ms-excel` and `application/octet-stream`.
+- Accepts `.csv`, `.xls` and `.xlsx` files with their supported browser MIME types.
 - Enforces a configurable upload byte limit (default 5 MB).
-- Requires the exact set of column names and rejects duplicate/missing/extra headers.
+- Normalizes CSV header casing and surrounding whitespace, then requires the exact set of column names and rejects duplicate/missing/extra headers.
 - Validates each row with a typed Pydantic model.
 - Counts accepted, duplicate and rejected rows and returns bounded row-error details.
 - Processes rows in chronological order and checks for duplicate source/group/date/indicator records.
