@@ -62,6 +62,26 @@ def test_import_persists_and_is_idempotent(client):
     assert dashboard["community_observations"] == 2
 
 
+def test_xlsx_import_persists_observations(client):
+    import pandas as pd
+
+    frame = pd.DataFrame([{
+        "domain": "community", "group_code": "C-XLSX", "source_code": "SYNTHETIC",
+        "observed_date": "2026-01-05", "indicator": "weekly_reports",
+        "value": 12, "denominator": 5000, "unit": "reports",
+    }])
+    stream = io.BytesIO()
+    frame.to_excel(stream, index=False, engine="openpyxl")
+    response = client.post(
+        "/api/v1/observations/import",
+        files={"file": ("observations.xlsx", io.BytesIO(stream.getvalue()),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["accepted"] == 1
+    assert client.get("/api/v1/dashboard").json()["community_observations"] == 1
+
+
 def test_import_generates_persisted_candidate_alert(client):
     lines = "".join(
         f"community,C002,SYNTHETIC,2026-02-{day:02d},weekly_reports,{value},5000,reports\n"
