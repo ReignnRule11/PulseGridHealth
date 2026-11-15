@@ -188,8 +188,8 @@ test("authenticated workspace enforces ingestion, review, role and tenant bounda
   await page.locator('input[type="file"]').setInputFiles({
     name: "synthetic-community.csv", mimeType: "text/csv", buffer: Buffer.from(csv)
   });
-  await page.getByRole("button", { name: "Import CSV" }).click();
-  await expect(page.getByText(/Imported 8;/)).toBeVisible();
+  await page.getByRole("button", { name: "Import dataset" }).click();
+  await expect(page.getByText(/Import complete — accepted 8;/)).toBeVisible();
   await expect(page.locator(".review-card").filter({ hasText: "E2E-COMMUNITY" })).toBeVisible();
 
   const reviewerToken = await invite(page, reviewerEmail, "reviewer");
