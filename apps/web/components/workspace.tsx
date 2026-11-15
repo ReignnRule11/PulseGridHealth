@@ -1237,7 +1237,7 @@ export default function Workspace() {
             </label>
 
             <button disabled={!csv || busy}>
-              {busy ? "Importing…" : "Validate & import"}
+              {busy ? "Importing…" : "Import dataset"}
             </button>
           </form>
         </section>
