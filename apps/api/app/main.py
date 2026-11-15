@@ -10,6 +10,7 @@ from app.review import router as review_router
 from app.ai_intelligence import router as ai_router
 from app.activity import router as activity_router
 from pathlib import Path
+from statistics import median
 from app.services.ingestion import parse_upload
 from app.services.detection import robust_anomaly
 
@@ -168,11 +169,27 @@ def list_alerts(status: str = Query(default="pending_review", max_length=30),
             if not group or not group.cohort_size or group.cohort_size < settings.min_workforce_cohort_size:
                 continue
             group_code = group.location_code
+        group_filter = (HealthObservation.community_id == obs.community_id
+                        if obs.community_id else
+                        HealthObservation.workforce_group_id == obs.workforce_group_id)
+        history_values = db.scalars(
+            select(HealthObservation.value).where(
+                HealthObservation.organization_id == org_id,
+                group_filter,
+                HealthObservation.indicator == obs.indicator,
+                HealthObservation.observed_date < obs.observed_date,
+            ).order_by(HealthObservation.observed_date.desc()).limit(max(detection.history_count, 1))
+        ).all()
+        history_numbers = [float(value) for value in history_values]
+        mad = None
+        if detection.baseline is not None and history_numbers:
+            mad = float(median([abs(value - detection.baseline) for value in history_numbers]))
         result.append({"id": str(alert.id), "status": alert.status, "severity": alert.severity,
             "group_code": group_code, "domain": "community" if obs.community_id else "workforce",
             "observed_date": obs.observed_date.isoformat(), "indicator": obs.indicator,
             "value": float(obs.value), "unit": obs.unit, "baseline": detection.baseline,
-            "score": detection.anomaly_score, "history_count": detection.history_count,
+            "mad": mad, "score": detection.anomaly_score, "threshold": detection.threshold,
+            "history_count": detection.history_count,
             "reason": detection.reason, "explanation": alert.explanation,
             "assigned_to_user_id": str(alert.assigned_to_user_id) if alert.assigned_to_user_id else None,
             "uploaded_by": uploader.full_name if uploader else None,
