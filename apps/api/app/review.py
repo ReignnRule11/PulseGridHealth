@@ -245,10 +245,13 @@ def alert_history(alert_id: UUID, context: dict = Depends(get_request_tenant), d
         "alert": {"id": str(alert.id), "status": alert.status, "severity": alert.severity},
         "investigation": None if investigation is None else {
             "id": str(investigation.id), "status": investigation.status, "findings": investigation.findings,
-            "disposition": investigation.disposition, "resolution_rationale": investigation.resolution_rationale},
+            "disposition": investigation.disposition, "resolution_rationale": investigation.resolution_rationale,
+            "started_by": investigation.started_by, "started_at": investigation.started_at.isoformat(),
+            "updated_at": investigation.updated_at.isoformat(),
+            "closed_at": investigation.closed_at.isoformat() if investigation.closed_at else None},
         "response_actions": [{"id": str(a.id), "action_type": a.action_type, "description": a.description,
             "owner_role": a.owner_role, "due_date": a.due_date.isoformat() if a.due_date else None,
-            "status": a.status} for a in actions],
+            "status": a.status, "created_by": a.created_by, "created_at": a.created_at.isoformat()} for a in actions],
         "audit_events": [{"event_type": e.event_type, "actor": e.actor, "detail": e.detail,
             "created_at": e.created_at.isoformat()} for e in events],
     }
