@@ -187,6 +187,57 @@ const roleNames: Record<string, string> = {
   viewer: "Read-only viewer",
 };
 
+type ReviewHistoryData = {
+  alert: { id: string; status: string; severity: string };
+  investigation: null | { status: string; findings: string | null; disposition: string | null; resolution_rationale: string | null; started_by: string; started_at: string; updated_at: string; closed_at: string | null };
+  response_actions: Array<{ id: string; action_type: string; description: string; owner_role: string | null; due_date: string | null; status: string; created_by: string; created_at: string }>;
+  audit_events: Array<{ event_type: string; actor: string; detail: Record<string, unknown>; created_at: string }>;
+};
+
+function ReviewHistoryView({ value }: { value: string }) {
+  let data: ReviewHistoryData;
+  try { data = JSON.parse(value) as ReviewHistoryData; }
+  catch { return <pre className="history-view">{value}</pre>; }
+  const dateLabel = (value: string) => new Date(value).toLocaleString();
+  return (
+    <div className="history-document">
+      <div className="history-document-heading">
+        <strong>Review record</strong>
+        <span>{data.alert.severity} priority · {data.alert.status.replaceAll("_", " ")}</span>
+      </div>
+      {data.investigation && <section>
+        <h3>Investigation</h3>
+        <p><strong>Status:</strong> {data.investigation.status.replaceAll("_", " ")}</p>
+        <p><strong>Started by:</strong> {data.investigation.started_by} · {dateLabel(data.investigation.started_at)}</p>
+        {data.investigation.findings && <p><strong>Findings:</strong> {data.investigation.findings}</p>}
+        {data.investigation.disposition && <p><strong>Disposition:</strong> {data.investigation.disposition}</p>}
+        {data.investigation.resolution_rationale && <p><strong>Resolution rationale:</strong> {data.investigation.resolution_rationale}</p>}
+        {data.investigation.closed_at && <p><strong>Closed:</strong> {dateLabel(data.investigation.closed_at)}</p>}
+      </section>}
+      <section>
+        <h3>Response actions ({data.response_actions.length})</h3>
+        {data.response_actions.length === 0 ? <p className="muted">No response actions recorded.</p> : data.response_actions.map(action => (
+          <article className="history-action" key={action.id}>
+            <div className="review-heading"><strong>{action.action_type.replaceAll("_", " ")}</strong><span>{action.status.replaceAll("_", " ")}</span></div>
+            <p>{action.description}</p>
+            <small>Owner: {action.owner_role ?? "Unassigned"} · Recorded by {action.created_by} · {dateLabel(action.created_at)}{action.due_date ? ` · Due ${action.due_date}` : ""}</small>
+          </article>
+        ))}
+      </section>
+      <section>
+        <h3>Audit timeline ({data.audit_events.length})</h3>
+        {data.audit_events.length === 0 ? <p className="muted">No audit events recorded.</p> : <ol className="history-timeline">
+          {data.audit_events.map((event, index) => <li key={index}>
+            <strong>{event.event_type.replaceAll(".", " ").replaceAll("_", " ")}</strong>
+            <p>{event.actor} · {dateLabel(event.created_at)}</p>
+            {Object.keys(event.detail ?? {}).length > 0 && <small>{Object.entries(event.detail).map(([key, item]) => `${key}: ${String(item)}`).join(" · ")}</small>}
+          </li>)}
+        </ol>}
+      </section>
+    </div>
+  );
+}
+
 export default function Workspace() {
   const pathname = usePathname() ?? "/";
   const router = useRouter();
@@ -1583,11 +1634,7 @@ export default function Workspace() {
                     : "View review history"}
                 </button>
 
-                {histories[a.id] && (
-                  <pre className="history-view">
-                    {histories[a.id]}
-                  </pre>
-                )}
+                {histories[a.id] && <ReviewHistoryView value={histories[a.id]} />}
               </article>
             ))}
           </div>
