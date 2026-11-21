@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import PopulationIntelligenceDashboard from "./population-intelligence-dashboard";
 
 const API = "";
 
@@ -1182,6 +1183,7 @@ export default function Workspace() {
 
       <nav className="workspace-nav" aria-label="Workspace navigation">
         <Link href="/workspace" aria-current="page">Workspace</Link>
+        <a href="#population-intelligence">Population dashboard</a>
         {(currentOrg?.role === "org_admin" || currentOrg?.role === "reviewer") && <a href="#review-inbox">Review inbox</a>}
         <Link href="/settings/profile">Personal settings</Link>
         {currentOrg?.role === "org_admin" && <Link href="/organization/access">Organization access</Link>}
@@ -1228,6 +1230,8 @@ export default function Workspace() {
           {message}
         </p>
       )}
+
+      <div id="population-intelligence"><PopulationIntelligenceDashboard data={dashboard} alerts={alerts} refresh={() => void loadWorkspace()} /></div>
 
       <section className="card section" aria-label="Notifications">
         <div className="section-heading">
